@@ -38,6 +38,14 @@
   },
   "overrides": [
     {
+      "includes": ["next-env.d.ts"],
+      "javascript": {
+        "formatter": {
+          "semicolons": "always"
+        }
+      }
+    },
+    {
       "includes": ["src/app/**/*.tsx"],
       "linter": {
         "rules": {
