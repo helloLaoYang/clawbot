@@ -19,10 +19,16 @@ export class DatabaseInvariantError extends Error {
   readonly name = "DatabaseInvariantError"
 
   constructor(
-    readonly invariant: "filesystem" | "sqlite_version" | "pragma",
+    readonly invariant:
+      | "filesystem"
+      | "sqlite_version"
+      | "pragma"
+      | "migration"
+      | "encryption_sentinel",
     message: string,
+    options?: ErrorOptions,
   ) {
-    super(message)
+    super(message, options)
   }
 }
 
