@@ -83,9 +83,9 @@ export function openDatabase(options: OpenDatabaseOptions): DatabaseHandle {
     const version = options.sqliteVersionReader?.readVersion() ?? readSQLiteVersion(client)
     assertSQLiteVersion(version)
     applyPragmas(client)
-    migrateDatabase(client)
+    const migration = migrateDatabase(client)
     const orm = drizzle(client, { schema })
-    verifyEncryptionSentinel(orm, options.cipher)
+    verifyEncryptionSentinel(orm, options.cipher, migration.initialized)
     return {
       client,
       orm,
@@ -121,47 +121,55 @@ function applyPragmas(client: Database.Database): void {
   client.pragma("wal_autocheckpoint = 1000")
 }
 
-function verifyEncryptionSentinel(database: ClawbotDatabase, cipher: FieldCipher): void {
-  try {
-    database.transaction(
-      (transaction) => {
-        const row = transaction
-          .select()
-          .from(encryptionSentinel)
-          .where(eq(encryptionSentinel.id, 1))
-          .get()
-        if (row === undefined) {
-          transaction
-            .insert(encryptionSentinel)
-            .values({
-              id: 1,
-              ciphertext: cipher.encrypt({
-                table: "encryption_sentinel",
-                rowId: "1",
-                column: "ciphertext",
-                plaintext: SENTINEL_PLAINTEXT,
-              }),
-              createdAt: EpochMillisecondsSchema.parse(Date.now()),
-            })
-            .run()
-          return
+function verifyEncryptionSentinel(
+  database: ClawbotDatabase,
+  cipher: FieldCipher,
+  initialize: boolean,
+): void {
+  database.transaction(
+    (transaction) => {
+      const row = transaction
+        .select()
+        .from(encryptionSentinel)
+        .where(eq(encryptionSentinel.id, 1))
+        .get()
+      if (row === undefined) {
+        if (!initialize) {
+          throw new DatabaseInvariantError(
+            "encryption_sentinel",
+            "database encryption sentinel is missing",
+          )
         }
-        const plaintext = cipher.decrypt({
+        transaction
+          .insert(encryptionSentinel)
+          .values({
+            id: 1,
+            ciphertext: cipher.encrypt({
+              table: "encryption_sentinel",
+              rowId: "1",
+              column: "ciphertext",
+              plaintext: SENTINEL_PLAINTEXT,
+            }),
+            createdAt: EpochMillisecondsSchema.parse(Date.now()),
+          })
+          .run()
+        return
+      }
+      let plaintext: string
+      try {
+        plaintext = cipher.decrypt({
           table: "encryption_sentinel",
           rowId: "1",
           column: "ciphertext",
           ciphertext: row.ciphertext,
         })
-        if (plaintext !== SENTINEL_PLAINTEXT) {
-          throw new EncryptionSentinelError()
-        }
-      },
-      { behavior: "immediate" },
-    )
-  } catch (error) {
-    if (error instanceof EncryptionSentinelError) {
-      throw error
-    }
-    throw new EncryptionSentinelError(error)
-  }
+      } catch (error) {
+        throw new EncryptionSentinelError(error)
+      }
+      if (plaintext !== SENTINEL_PLAINTEXT) {
+        throw new EncryptionSentinelError()
+      }
+    },
+    { behavior: "immediate" },
+  )
 }
