@@ -1,4 +1,5 @@
 import type {
+  AcquireServiceLeaseInput,
   AdminLoginState,
   AdmissionInput,
   BotCredentials,
@@ -10,6 +11,7 @@ import type {
   JobRecord,
   RateStateRecord,
   RecordAttemptInput,
+  RenewServiceLeaseInput,
   ServiceLease,
   UpsertContextInput,
 } from "../contracts"
@@ -44,7 +46,8 @@ export interface QueueRepository {
 
 export interface RuntimeRepository {
   getServiceLease(): ServiceLease | null
-  saveServiceLease(lease: ServiceLease): void
+  acquireServiceLease(input: AcquireServiceLeaseInput): ServiceLease | null
+  renewServiceLease(input: RenewServiceLeaseInput): boolean
   getAdminLoginState(): AdminLoginState
   saveAdminLoginState(state: AdminLoginState): void
 }

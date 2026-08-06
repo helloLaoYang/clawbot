@@ -1,6 +1,11 @@
-import { eq } from "drizzle-orm"
+import { and, eq, gt, lte, sql } from "drizzle-orm"
 
-import type { AdminLoginState, ServiceLease } from "../contracts"
+import type {
+  AcquireServiceLeaseInput,
+  AdminLoginState,
+  RenewServiceLeaseInput,
+  ServiceLease,
+} from "../contracts"
 import { adminLoginState, serviceLease } from "../schema"
 import type { ClawbotDatabase } from "../types"
 import type { RuntimeRepository } from "./contracts"
@@ -21,22 +26,53 @@ export class DrizzleRuntimeRepository implements RuntimeRepository {
     return row ?? null
   }
 
-  saveServiceLease(lease: ServiceLease): void {
-    this.database.transaction(
-      (transaction) =>
-        transaction
+  acquireServiceLease(input: AcquireServiceLeaseInput): ServiceLease | null {
+    return this.database.transaction(
+      (transaction) => {
+        const acquired = transaction
           .insert(serviceLease)
-          .values(lease)
+          .values({
+            name: "primary",
+            ownerId: input.ownerId,
+            fencingToken: 1,
+            expiresAt: input.expiresAt,
+            updatedAt: input.now,
+          })
           .onConflictDoUpdate({
             target: serviceLease.name,
             set: {
-              ownerId: lease.ownerId,
-              fencingToken: lease.fencingToken,
-              expiresAt: lease.expiresAt,
-              updatedAt: lease.updatedAt,
+              ownerId: input.ownerId,
+              fencingToken: sql`${serviceLease.fencingToken} + 1`,
+              expiresAt: input.expiresAt,
+              updatedAt: input.now,
             },
+            setWhere: lte(serviceLease.expiresAt, input.now),
           })
-          .run(),
+          .returning()
+          .get()
+        return acquired ?? null
+      },
+      { behavior: "immediate" },
+    )
+  }
+
+  renewServiceLease(input: RenewServiceLeaseInput): boolean {
+    return this.database.transaction(
+      (transaction) => {
+        const result = transaction
+          .update(serviceLease)
+          .set({ expiresAt: input.expiresAt, updatedAt: input.now })
+          .where(
+            and(
+              eq(serviceLease.name, "primary"),
+              eq(serviceLease.ownerId, input.ownerId),
+              eq(serviceLease.fencingToken, input.fencingToken),
+              gt(serviceLease.expiresAt, input.now),
+            ),
+          )
+          .run()
+        return result.changes === 1
+      },
       { behavior: "immediate" },
     )
   }

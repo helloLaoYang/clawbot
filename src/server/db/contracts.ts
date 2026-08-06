@@ -221,6 +221,16 @@ export type RecordAttemptInput = {
   readonly startedAt: EpochMilliseconds
 }
 
+export type AcquireServiceLeaseInput = {
+  readonly ownerId: string
+  readonly now: EpochMilliseconds
+  readonly expiresAt: EpochMilliseconds
+}
+
+export type RenewServiceLeaseInput = AcquireServiceLeaseInput & {
+  readonly fencingToken: number
+}
+
 export type ServiceLease = {
   readonly name: "primary"
   readonly ownerId: string
