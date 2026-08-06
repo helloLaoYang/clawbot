@@ -1,11 +1,19 @@
+import { randomUUID } from "node:crypto"
 import { mkdirSync, rmSync } from "node:fs"
 
-import { DatabaseInvariantError, EncryptionSentinelError, openDatabase } from "./database"
+import {
+  type DatabaseHandle,
+  DatabaseInvariantError,
+  EncryptionSentinelError,
+  openDatabase,
+} from "./database"
+import { EpochMillisecondsSchema } from "./ids"
 import {
   createAdmissionInput,
   createBotInput,
   createContextInput,
   createTestCipher,
+  createTestDatabase,
   openTestDatabase,
 } from "./test-support/fixtures"
 
@@ -61,6 +69,34 @@ function expectOldVersionFailure(): void {
   throw new SurfaceAssertionError("old SQLite version was accepted")
 }
 
+function expectInvariantFailure(
+  label: string,
+  mutate: (handle: DatabaseHandle) => void,
+  invariant: DatabaseInvariantError["invariant"],
+): void {
+  const testDatabase = createTestDatabase(label)
+  const handle = openTestDatabase(testDatabase.path)
+  try {
+    mutate(handle)
+    handle.close()
+    try {
+      const unexpected = openTestDatabase(testDatabase.path)
+      unexpected.close()
+    } catch (error) {
+      if (error instanceof DatabaseInvariantError && error.invariant === invariant) {
+        return
+      }
+      throw error
+    }
+    throw new SurfaceAssertionError(`${invariant} corruption was accepted`)
+  } finally {
+    if (handle.client.open) {
+      handle.close()
+    }
+    testDatabase.cleanup()
+  }
+}
+
 function runSurface(): void {
   mkdirSync(QA_ROOT, { recursive: true })
   removeDatabaseFiles()
@@ -85,6 +121,50 @@ function runSurface(): void {
   assertSurface(context?.contextToken === contextInput.contextToken, "context did not decrypt")
   assertSurface(job?.text === admissionInput.job.text, "queued text did not decrypt")
   assertSurface(job?.recipient === admissionInput.job.recipient, "recipient did not decrypt")
+  const firstOwner = randomUUID()
+  const lease = restarted.runtime.acquireServiceLease({
+    ownerId: firstOwner,
+    now: EpochMillisecondsSchema.parse(1_800_000_000_000),
+    expiresAt: EpochMillisecondsSchema.parse(1_800_000_015_000),
+  })
+  const blockedLease = restarted.runtime.acquireServiceLease({
+    ownerId: randomUUID(),
+    now: EpochMillisecondsSchema.parse(1_800_000_005_000),
+    expiresAt: EpochMillisecondsSchema.parse(1_800_000_020_000),
+  })
+  const secondOwner = randomUUID()
+  const replacementLease = restarted.runtime.acquireServiceLease({
+    ownerId: secondOwner,
+    now: EpochMillisecondsSchema.parse(1_800_000_015_000),
+    expiresAt: EpochMillisecondsSchema.parse(1_800_000_030_000),
+  })
+  const staleRenewal = restarted.runtime.renewServiceLease({
+    ownerId: firstOwner,
+    fencingToken: 1,
+    now: EpochMillisecondsSchema.parse(1_800_000_016_000),
+    expiresAt: EpochMillisecondsSchema.parse(1_800_000_031_000),
+  })
+  assertSurface(lease?.fencingToken === 1, "initial service lease fence was not 1")
+  assertSurface(blockedLease === null, "active service lease was replaced")
+  assertSurface(
+    replacementLease?.ownerId === secondOwner && replacementLease.fencingToken === 2,
+    "expired service lease did not advance its fence",
+  )
+  assertSurface(!staleRenewal, "stale service lease owner renewed")
+  const firstClaim = restarted.queue.claimNext({
+    botId: botInput.id,
+    ownerId: randomUUID(),
+    now: admissionInput.job.createdAt,
+    leaseUntil: EpochMillisecondsSchema.parse(1_800_000_001_000),
+  })
+  const reclaimed = restarted.queue.claimNext({
+    botId: botInput.id,
+    ownerId: randomUUID(),
+    now: EpochMillisecondsSchema.parse(1_800_000_001_000),
+    leaseUntil: EpochMillisecondsSchema.parse(1_800_000_002_000),
+  })
+  assertSurface(firstClaim?.leaseGeneration === 1, "initial job lease generation was not 1")
+  assertSurface(reclaimed?.leaseGeneration === 2, "expired job lease was not reclaimed")
   const integrityCheck = restarted.client.pragma("integrity_check", { simple: true })
   const foreignKeyCheck = restarted.client.pragma("foreign_key_check")
   assertSurface(integrityCheck === "ok", "SQLite integrity check failed")
@@ -120,12 +200,27 @@ function runSurface(): void {
   restarted.close()
   expectCorruptSentinelFailure()
   expectOldVersionFailure()
+  expectInvariantFailure(
+    "task-4-qa-migration-tamper",
+    (handle) =>
+      handle.client.prepare("UPDATE __drizzle_migrations SET hash = ?").run("0".repeat(64)),
+    "migration",
+  )
+  expectInvariantFailure(
+    "task-4-qa-missing-sentinel",
+    (handle) => handle.client.exec("DELETE FROM encryption_sentinel"),
+    "encryption_sentinel",
+  )
 
   process.stdout.write(
     `SURFACE: ${JSON.stringify({
       ...surface,
       corruptSentinel: "rejected",
       oldVersion: "rejected",
+      migrationTamper: "rejected",
+      missingSentinel: "rejected",
+      serviceLeaseCas: "ok",
+      expiredJobReclaim: "ok",
     })}\n`,
   )
 }
