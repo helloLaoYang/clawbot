@@ -1,0 +1,1399 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "3b0be127-8cf8-4f5d-90ae-2872cbd86898",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "admin_login_state": {
+      "name": "admin_login_state",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "failed_attempts": {
+          "name": "failed_attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "window_started_at": {
+          "name": "window_started_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "locked_until": {
+          "name": "locked_until",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "0"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "admin_login_state_singleton": {
+          "name": "admin_login_state_singleton",
+          "value": "\"admin_login_state\".\"id\" = 1"
+        },
+        "admin_login_state_failures_nonnegative": {
+          "name": "admin_login_state_failures_nonnegative",
+          "value": "\"admin_login_state\".\"failed_attempts\" >= 0"
+        },
+        "admin_login_state_timestamps_nonnegative": {
+          "name": "admin_login_state_timestamps_nonnegative",
+          "value": "(\"admin_login_state\".\"window_started_at\" IS NULL OR \"admin_login_state\".\"window_started_at\" >= 0)\n        AND (\"admin_login_state\".\"locked_until\" IS NULL OR \"admin_login_state\".\"locked_until\" >= 0)\n        AND \"admin_login_state\".\"updated_at\" >= 0"
+        }
+      }
+    },
+    "attempts": {
+      "name": "attempts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attempt": {
+          "name": "attempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "classification": {
+          "name": "classification",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "http_status": {
+          "name": "http_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tencent_ret": {
+          "name": "tencent_ret",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "attempts_job_attempt_unique": {
+          "name": "attempts_job_attempt_unique",
+          "columns": ["job_id", "attempt"],
+          "isUnique": true
+        },
+        "attempts_job_started_idx": {
+          "name": "attempts_job_started_idx",
+          "columns": ["job_id", "started_at"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "attempts_job_id_jobs_id_fk": {
+          "name": "attempts_job_id_jobs_id_fk",
+          "tableFrom": "attempts",
+          "tableTo": "jobs",
+          "columnsFrom": ["job_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "attempts_id_uuid_v4": {
+          "name": "attempts_id_uuid_v4",
+          "value": "length(\"attempts\".\"id\") = 36\n      AND substr(\"attempts\".\"id\", 9, 1) = '-'\n      AND substr(\"attempts\".\"id\", 14, 1) = '-'\n      AND substr(\"attempts\".\"id\", 15, 1) = '4'\n      AND substr(\"attempts\".\"id\", 19, 1) = '-'\n      AND substr(\"attempts\".\"id\", 20, 1) IN ('8', '9', 'a', 'b')\n      AND substr(\"attempts\".\"id\", 24, 1) = '-'\n      AND \"attempts\".\"id\" = lower(\"attempts\".\"id\")\n      AND length(replace(\"attempts\".\"id\", '-', '')) = 32\n      AND \"attempts\".\"id\" NOT GLOB '*[^0-9a-f-]*'"
+        },
+        "attempts_attempt_positive": {
+          "name": "attempts_attempt_positive",
+          "value": "\"attempts\".\"attempt\" >= 1"
+        },
+        "attempts_classification_enum": {
+          "name": "attempts_classification_enum",
+          "value": "\"attempts\".\"classification\" IN (\n        'in_flight', 'success', 'network', 'timeout', 'rate_limited',\n        'upstream_http', 'upstream_protocol', 'reauth_required', 'abandoned'\n      )"
+        },
+        "attempts_completion_consistent": {
+          "name": "attempts_completion_consistent",
+          "value": "(\"attempts\".\"classification\" = 'in_flight' AND \"attempts\".\"completed_at\" IS NULL)\n        OR (\"attempts\".\"classification\" <> 'in_flight' AND \"attempts\".\"completed_at\" IS NOT NULL)"
+        },
+        "attempts_duration_nonnegative": {
+          "name": "attempts_duration_nonnegative",
+          "value": "\"attempts\".\"duration_ms\" IS NULL OR \"attempts\".\"duration_ms\" >= 0"
+        },
+        "attempts_timestamps_nonnegative": {
+          "name": "attempts_timestamps_nonnegative",
+          "value": "\"attempts\".\"started_at\" >= 0\n        AND (\"attempts\".\"completed_at\" IS NULL OR \"attempts\".\"completed_at\" >= \"attempts\".\"started_at\")"
+        }
+      }
+    },
+    "batches": {
+      "name": "batches",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "invocation_id": {
+          "name": "invocation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recipient_encrypted": {
+          "name": "recipient_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recipient_lookup_hash": {
+          "name": "recipient_lookup_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_fingerprint": {
+          "name": "user_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "text_encrypted": {
+          "name": "text_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "batches_invocation_unique": {
+          "name": "batches_invocation_unique",
+          "columns": ["invocation_id"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "batches_invocation_id_invocations_id_fk": {
+          "name": "batches_invocation_id_invocations_id_fk",
+          "tableFrom": "batches",
+          "tableTo": "invocations",
+          "columnsFrom": ["invocation_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "batches_id_uuid_v4": {
+          "name": "batches_id_uuid_v4",
+          "value": "length(\"batches\".\"id\") = 36\n      AND substr(\"batches\".\"id\", 9, 1) = '-'\n      AND substr(\"batches\".\"id\", 14, 1) = '-'\n      AND substr(\"batches\".\"id\", 15, 1) = '4'\n      AND substr(\"batches\".\"id\", 19, 1) = '-'\n      AND substr(\"batches\".\"id\", 20, 1) IN ('8', '9', 'a', 'b')\n      AND substr(\"batches\".\"id\", 24, 1) = '-'\n      AND \"batches\".\"id\" = lower(\"batches\".\"id\")\n      AND length(replace(\"batches\".\"id\", '-', '')) = 32\n      AND \"batches\".\"id\" NOT GLOB '*[^0-9a-f-]*'"
+        },
+        "batches_recipient_encrypted": {
+          "name": "batches_recipient_encrypted",
+          "value": "\"batches\".\"recipient_encrypted\" LIKE 'v1.%'"
+        },
+        "batches_text_encrypted": {
+          "name": "batches_text_encrypted",
+          "value": "\"batches\".\"text_encrypted\" LIKE 'v1.%'"
+        },
+        "batches_recipient_lookup_sha256": {
+          "name": "batches_recipient_lookup_sha256",
+          "value": "length(\"batches\".\"recipient_lookup_hash\") = 64 AND \"batches\".\"recipient_lookup_hash\" NOT GLOB '*[^0-9a-f]*'"
+        },
+        "batches_created_nonnegative": {
+          "name": "batches_created_nonnegative",
+          "value": "\"batches\".\"created_at\" >= 0"
+        }
+      }
+    },
+    "bot_secrets": {
+      "name": "bot_secrets",
+      "columns": {
+        "bot_id": {
+          "name": "bot_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bot_token_encrypted": {
+          "name": "bot_token_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "base_url": {
+          "name": "base_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "webhook_bearer_hash": {
+          "name": "webhook_bearer_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "webhook_bearer_last_four": {
+          "name": "webhook_bearer_last_four",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "bot_secrets_bot_id_bots_id_fk": {
+          "name": "bot_secrets_bot_id_bots_id_fk",
+          "tableFrom": "bot_secrets",
+          "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "bot_secrets_token_encrypted": {
+          "name": "bot_secrets_token_encrypted",
+          "value": "\"bot_secrets\".\"bot_token_encrypted\" LIKE 'v1.%'"
+        },
+        "bot_secrets_bearer_hash_sha256": {
+          "name": "bot_secrets_bearer_hash_sha256",
+          "value": "length(\"bot_secrets\".\"webhook_bearer_hash\") = 64 AND \"bot_secrets\".\"webhook_bearer_hash\" NOT GLOB '*[^0-9a-f]*'"
+        },
+        "bot_secrets_bearer_last_four": {
+          "name": "bot_secrets_bearer_last_four",
+          "value": "length(\"bot_secrets\".\"webhook_bearer_last_four\") = 4"
+        },
+        "bot_secrets_timestamps_nonnegative": {
+          "name": "bot_secrets_timestamps_nonnegative",
+          "value": "\"bot_secrets\".\"created_at\" >= 0 AND \"bot_secrets\".\"updated_at\" >= \"bot_secrets\".\"created_at\""
+        }
+      }
+    },
+    "bots": {
+      "name": "bots",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "public_id": {
+          "name": "public_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_fingerprint": {
+          "name": "account_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ilink_bot_id_lookup_hash": {
+          "name": "ilink_bot_id_lookup_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bound_user_fingerprint": {
+          "name": "bound_user_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ilink_bot_id_encrypted": {
+          "name": "ilink_bot_id_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ilink_user_id_encrypted": {
+          "name": "ilink_user_id_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "remark": {
+          "name": "remark",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "auth_status": {
+          "name": "auth_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'active'"
+        },
+        "max_sends_per_minute": {
+          "name": "max_sends_per_minute",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "bots_public_id_unique": {
+          "name": "bots_public_id_unique",
+          "columns": ["public_id"],
+          "isUnique": true
+        },
+        "bots_upstream_lookup_unique": {
+          "name": "bots_upstream_lookup_unique",
+          "columns": ["ilink_bot_id_lookup_hash"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "bots_id_uuid_v4": {
+          "name": "bots_id_uuid_v4",
+          "value": "length(\"bots\".\"id\") = 36\n      AND substr(\"bots\".\"id\", 9, 1) = '-'\n      AND substr(\"bots\".\"id\", 14, 1) = '-'\n      AND substr(\"bots\".\"id\", 15, 1) = '4'\n      AND substr(\"bots\".\"id\", 19, 1) = '-'\n      AND substr(\"bots\".\"id\", 20, 1) IN ('8', '9', 'a', 'b')\n      AND substr(\"bots\".\"id\", 24, 1) = '-'\n      AND \"bots\".\"id\" = lower(\"bots\".\"id\")\n      AND length(replace(\"bots\".\"id\", '-', '')) = 32\n      AND \"bots\".\"id\" NOT GLOB '*[^0-9a-f-]*'"
+        },
+        "bots_public_id_uuid_v4": {
+          "name": "bots_public_id_uuid_v4",
+          "value": "length(\"bots\".\"public_id\") = 36\n      AND substr(\"bots\".\"public_id\", 9, 1) = '-'\n      AND substr(\"bots\".\"public_id\", 14, 1) = '-'\n      AND substr(\"bots\".\"public_id\", 15, 1) = '4'\n      AND substr(\"bots\".\"public_id\", 19, 1) = '-'\n      AND substr(\"bots\".\"public_id\", 20, 1) IN ('8', '9', 'a', 'b')\n      AND substr(\"bots\".\"public_id\", 24, 1) = '-'\n      AND \"bots\".\"public_id\" = lower(\"bots\".\"public_id\")\n      AND length(replace(\"bots\".\"public_id\", '-', '')) = 32\n      AND \"bots\".\"public_id\" NOT GLOB '*[^0-9a-f-]*'"
+        },
+        "bots_upstream_lookup_sha256": {
+          "name": "bots_upstream_lookup_sha256",
+          "value": "length(\"bots\".\"ilink_bot_id_lookup_hash\") = 64 AND \"bots\".\"ilink_bot_id_lookup_hash\" NOT GLOB '*[^0-9a-f]*'"
+        },
+        "bots_account_fingerprint_format": {
+          "name": "bots_account_fingerprint_format",
+          "value": "length(\"bots\".\"account_fingerprint\") = 13\n        AND substr(\"bots\".\"account_fingerprint\", 1, 5) = 'acct_'\n        AND substr(\"bots\".\"account_fingerprint\", 6) NOT GLOB '*[^0-9a-f]*'"
+        },
+        "bots_bound_user_fingerprint_format": {
+          "name": "bots_bound_user_fingerprint_format",
+          "value": "\"bots\".\"bound_user_fingerprint\" IS NULL OR (\n        length(\"bots\".\"bound_user_fingerprint\") = 13\n        AND substr(\"bots\".\"bound_user_fingerprint\", 1, 5) = 'user_'\n        AND substr(\"bots\".\"bound_user_fingerprint\", 6) NOT GLOB '*[^0-9a-f]*'\n      )"
+        },
+        "bots_ilink_bot_id_encrypted": {
+          "name": "bots_ilink_bot_id_encrypted",
+          "value": "\"bots\".\"ilink_bot_id_encrypted\" LIKE 'v1.%'"
+        },
+        "bots_ilink_user_id_encrypted": {
+          "name": "bots_ilink_user_id_encrypted",
+          "value": "\"bots\".\"ilink_user_id_encrypted\" LIKE 'v1.%'"
+        },
+        "bots_remark_length": {
+          "name": "bots_remark_length",
+          "value": "length(\"bots\".\"remark\") <= 200"
+        },
+        "bots_enabled_boolean": {
+          "name": "bots_enabled_boolean",
+          "value": "\"bots\".\"enabled\" IN (0, 1)"
+        },
+        "bots_auth_status_enum": {
+          "name": "bots_auth_status_enum",
+          "value": "\"bots\".\"auth_status\" IN ('active', 'reauth_required')"
+        },
+        "bots_max_sends_per_minute_range": {
+          "name": "bots_max_sends_per_minute_range",
+          "value": "\"bots\".\"max_sends_per_minute\" BETWEEN 1 AND 600"
+        },
+        "bots_timestamps_nonnegative": {
+          "name": "bots_timestamps_nonnegative",
+          "value": "\"bots\".\"created_at\" >= 0 AND \"bots\".\"updated_at\" >= \"bots\".\"created_at\""
+        }
+      }
+    },
+    "conversation_contexts": {
+      "name": "conversation_contexts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bot_id": {
+          "name": "bot_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id_encrypted": {
+          "name": "user_id_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_lookup_hash": {
+          "name": "user_lookup_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_fingerprint": {
+          "name": "user_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "context_token_encrypted": {
+          "name": "context_token_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "conversation_contexts_bot_lookup_unique": {
+          "name": "conversation_contexts_bot_lookup_unique",
+          "columns": ["bot_id", "user_lookup_hash"],
+          "isUnique": true
+        },
+        "conversation_contexts_bot_updated_idx": {
+          "name": "conversation_contexts_bot_updated_idx",
+          "columns": ["bot_id", "updated_at"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "conversation_contexts_bot_id_bots_id_fk": {
+          "name": "conversation_contexts_bot_id_bots_id_fk",
+          "tableFrom": "conversation_contexts",
+          "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "conversation_contexts_id_uuid_v4": {
+          "name": "conversation_contexts_id_uuid_v4",
+          "value": "length(\"conversation_contexts\".\"id\") = 36\n      AND substr(\"conversation_contexts\".\"id\", 9, 1) = '-'\n      AND substr(\"conversation_contexts\".\"id\", 14, 1) = '-'\n      AND substr(\"conversation_contexts\".\"id\", 15, 1) = '4'\n      AND substr(\"conversation_contexts\".\"id\", 19, 1) = '-'\n      AND substr(\"conversation_contexts\".\"id\", 20, 1) IN ('8', '9', 'a', 'b')\n      AND substr(\"conversation_contexts\".\"id\", 24, 1) = '-'\n      AND \"conversation_contexts\".\"id\" = lower(\"conversation_contexts\".\"id\")\n      AND length(replace(\"conversation_contexts\".\"id\", '-', '')) = 32\n      AND \"conversation_contexts\".\"id\" NOT GLOB '*[^0-9a-f-]*'"
+        },
+        "conversation_contexts_user_id_encrypted": {
+          "name": "conversation_contexts_user_id_encrypted",
+          "value": "\"conversation_contexts\".\"user_id_encrypted\" LIKE 'v1.%'"
+        },
+        "conversation_contexts_context_token_encrypted": {
+          "name": "conversation_contexts_context_token_encrypted",
+          "value": "\"conversation_contexts\".\"context_token_encrypted\" LIKE 'v1.%'"
+        },
+        "conversation_contexts_user_lookup_sha256": {
+          "name": "conversation_contexts_user_lookup_sha256",
+          "value": "length(\"conversation_contexts\".\"user_lookup_hash\") = 64 AND \"conversation_contexts\".\"user_lookup_hash\" NOT GLOB '*[^0-9a-f]*'"
+        },
+        "conversation_contexts_user_fingerprint_format": {
+          "name": "conversation_contexts_user_fingerprint_format",
+          "value": "length(\"conversation_contexts\".\"user_fingerprint\") = 13\n        AND substr(\"conversation_contexts\".\"user_fingerprint\", 1, 5) = 'user_'\n        AND substr(\"conversation_contexts\".\"user_fingerprint\", 6) NOT GLOB '*[^0-9a-f]*'"
+        },
+        "conversation_contexts_timestamps_nonnegative": {
+          "name": "conversation_contexts_timestamps_nonnegative",
+          "value": "\"conversation_contexts\".\"created_at\" >= 0 AND \"conversation_contexts\".\"updated_at\" >= \"conversation_contexts\".\"created_at\""
+        }
+      }
+    },
+    "encryption_sentinel": {
+      "name": "encryption_sentinel",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ciphertext": {
+          "name": "ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "encryption_sentinel_singleton": {
+          "name": "encryption_sentinel_singleton",
+          "value": "\"encryption_sentinel\".\"id\" = 1"
+        },
+        "encryption_sentinel_envelope": {
+          "name": "encryption_sentinel_envelope",
+          "value": "\"encryption_sentinel\".\"ciphertext\" LIKE 'v1.%'"
+        },
+        "encryption_sentinel_created_nonnegative": {
+          "name": "encryption_sentinel_created_nonnegative",
+          "value": "\"encryption_sentinel\".\"created_at\" >= 0"
+        }
+      }
+    },
+    "inbound_state": {
+      "name": "inbound_state",
+      "columns": {
+        "bot_id": {
+          "name": "bot_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cursor_encrypted": {
+          "name": "cursor_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_polled_at": {
+          "name": "last_polled_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "inbound_state_bot_id_bots_id_fk": {
+          "name": "inbound_state_bot_id_bots_id_fk",
+          "tableFrom": "inbound_state",
+          "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "inbound_state_cursor_encrypted": {
+          "name": "inbound_state_cursor_encrypted",
+          "value": "\"inbound_state\".\"cursor_encrypted\" IS NULL OR \"inbound_state\".\"cursor_encrypted\" LIKE 'v1.%'"
+        },
+        "inbound_state_timestamps_nonnegative": {
+          "name": "inbound_state_timestamps_nonnegative",
+          "value": "\"inbound_state\".\"last_polled_at\" IS NULL OR \"inbound_state\".\"last_polled_at\" >= 0"
+        },
+        "inbound_state_updated_nonnegative": {
+          "name": "inbound_state_updated_nonnegative",
+          "value": "\"inbound_state\".\"updated_at\" >= 0"
+        }
+      }
+    },
+    "invocations": {
+      "name": "invocations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "endpoint": {
+          "name": "endpoint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bot_id": {
+          "name": "bot_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "idempotency_scope": {
+          "name": "idempotency_scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "idempotency_key_hash": {
+          "name": "idempotency_key_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "request_digest": {
+          "name": "request_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_fingerprint": {
+          "name": "user_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "response_http_status": {
+          "name": "response_http_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "response_body": {
+          "name": "response_body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "response_retry_after": {
+          "name": "response_retry_after",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "deadline_at": {
+          "name": "deadline_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "invocations_request_id_unique": {
+          "name": "invocations_request_id_unique",
+          "columns": ["request_id"],
+          "isUnique": true
+        },
+        "invocations_idempotency_unique": {
+          "name": "invocations_idempotency_unique",
+          "columns": ["idempotency_scope", "idempotency_key_hash"],
+          "isUnique": true
+        },
+        "invocations_timeline_idx": {
+          "name": "invocations_timeline_idx",
+          "columns": ["created_at", "id"],
+          "isUnique": false
+        },
+        "invocations_bot_timeline_idx": {
+          "name": "invocations_bot_timeline_idx",
+          "columns": ["bot_id", "created_at", "id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "invocations_bot_id_bots_id_fk": {
+          "name": "invocations_bot_id_bots_id_fk",
+          "tableFrom": "invocations",
+          "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "invocations_id_uuid_v4": {
+          "name": "invocations_id_uuid_v4",
+          "value": "length(\"invocations\".\"id\") = 36\n      AND substr(\"invocations\".\"id\", 9, 1) = '-'\n      AND substr(\"invocations\".\"id\", 14, 1) = '-'\n      AND substr(\"invocations\".\"id\", 15, 1) = '4'\n      AND substr(\"invocations\".\"id\", 19, 1) = '-'\n      AND substr(\"invocations\".\"id\", 20, 1) IN ('8', '9', 'a', 'b')\n      AND substr(\"invocations\".\"id\", 24, 1) = '-'\n      AND \"invocations\".\"id\" = lower(\"invocations\".\"id\")\n      AND length(replace(\"invocations\".\"id\", '-', '')) = 32\n      AND \"invocations\".\"id\" NOT GLOB '*[^0-9a-f-]*'"
+        },
+        "invocations_request_id_uuid_v4": {
+          "name": "invocations_request_id_uuid_v4",
+          "value": "length(\"invocations\".\"request_id\") = 36\n      AND substr(\"invocations\".\"request_id\", 9, 1) = '-'\n      AND substr(\"invocations\".\"request_id\", 14, 1) = '-'\n      AND substr(\"invocations\".\"request_id\", 15, 1) = '4'\n      AND substr(\"invocations\".\"request_id\", 19, 1) = '-'\n      AND substr(\"invocations\".\"request_id\", 20, 1) IN ('8', '9', 'a', 'b')\n      AND substr(\"invocations\".\"request_id\", 24, 1) = '-'\n      AND \"invocations\".\"request_id\" = lower(\"invocations\".\"request_id\")\n      AND length(replace(\"invocations\".\"request_id\", '-', '')) = 32\n      AND \"invocations\".\"request_id\" NOT GLOB '*[^0-9a-f-]*'"
+        },
+        "invocations_endpoint_enum": {
+          "name": "invocations_endpoint_enum",
+          "value": "\"invocations\".\"endpoint\" IN ('single', 'admin_batch')"
+        },
+        "invocations_status_enum": {
+          "name": "invocations_status_enum",
+          "value": "\"invocations\".\"status\" IN (\n        'queued', 'leased', 'retry_wait', 'succeeded', 'partial', 'failed',\n        'deadline_exceeded', 'cancelled'\n      )"
+        },
+        "invocations_idempotency_complete": {
+          "name": "invocations_idempotency_complete",
+          "value": "(\"invocations\".\"idempotency_scope\" IS NULL\n        AND \"invocations\".\"idempotency_key_hash\" IS NULL\n        AND \"invocations\".\"request_digest\" IS NULL)\n        OR (\"invocations\".\"idempotency_scope\" IS NOT NULL\n          AND \"invocations\".\"idempotency_key_hash\" IS NOT NULL\n          AND \"invocations\".\"request_digest\" IS NOT NULL)"
+        },
+        "invocations_idempotency_hash": {
+          "name": "invocations_idempotency_hash",
+          "value": "\"invocations\".\"idempotency_key_hash\" IS NULL OR (\n        length(\"invocations\".\"idempotency_key_hash\") = 64\n        AND \"invocations\".\"idempotency_key_hash\" NOT GLOB '*[^0-9a-f]*'\n      )"
+        },
+        "invocations_request_digest": {
+          "name": "invocations_request_digest",
+          "value": "\"invocations\".\"request_digest\" IS NULL OR (\n        length(\"invocations\".\"request_digest\") = 64\n        AND \"invocations\".\"request_digest\" NOT GLOB '*[^0-9a-f]*'\n      )"
+        },
+        "invocations_attempt_count_nonnegative": {
+          "name": "invocations_attempt_count_nonnegative",
+          "value": "\"invocations\".\"attempt_count\" >= 0"
+        },
+        "invocations_timestamps_nonnegative": {
+          "name": "invocations_timestamps_nonnegative",
+          "value": "\"invocations\".\"created_at\" >= 0\n        AND \"invocations\".\"updated_at\" >= \"invocations\".\"created_at\"\n        AND \"invocations\".\"deadline_at\" >= \"invocations\".\"created_at\"\n        AND (\"invocations\".\"completed_at\" IS NULL OR \"invocations\".\"completed_at\" >= \"invocations\".\"created_at\")"
+        }
+      }
+    },
+    "jobs": {
+      "name": "jobs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "invocation_id": {
+          "name": "invocation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "batch_order": {
+          "name": "batch_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "bot_id": {
+          "name": "bot_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recipient_encrypted": {
+          "name": "recipient_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recipient_lookup_hash": {
+          "name": "recipient_lookup_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_fingerprint": {
+          "name": "user_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "text_encrypted": {
+          "name": "text_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "context_token_encrypted": {
+          "name": "context_token_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "admission_estimated_at": {
+          "name": "admission_estimated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "retry_not_before": {
+          "name": "retry_not_before",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lease_generation": {
+          "name": "lease_generation",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "lease_until": {
+          "name": "lease_until",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "deadline_at": {
+          "name": "deadline_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "message_id": {
+          "name": "message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "result_http_status": {
+          "name": "result_http_status",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error_retryable": {
+          "name": "error_retryable",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "jobs_client_id_unique": {
+          "name": "jobs_client_id_unique",
+          "columns": ["client_id"],
+          "isUnique": true
+        },
+        "jobs_invocation_bot_unique": {
+          "name": "jobs_invocation_bot_unique",
+          "columns": ["invocation_id", "bot_id"],
+          "isUnique": true
+        },
+        "jobs_batch_order_unique": {
+          "name": "jobs_batch_order_unique",
+          "columns": ["batch_id", "batch_order"],
+          "isUnique": true
+        },
+        "jobs_bot_fifo_idx": {
+          "name": "jobs_bot_fifo_idx",
+          "columns": ["bot_id", "status", "created_at", "id"],
+          "isUnique": false
+        },
+        "jobs_bot_tail_idx": {
+          "name": "jobs_bot_tail_idx",
+          "columns": ["bot_id", "admission_estimated_at", "created_at", "id"],
+          "isUnique": false
+        },
+        "jobs_lease_expiry_idx": {
+          "name": "jobs_lease_expiry_idx",
+          "columns": ["status", "lease_until"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "jobs_invocation_id_invocations_id_fk": {
+          "name": "jobs_invocation_id_invocations_id_fk",
+          "tableFrom": "jobs",
+          "tableTo": "invocations",
+          "columnsFrom": ["invocation_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "jobs_batch_id_batches_id_fk": {
+          "name": "jobs_batch_id_batches_id_fk",
+          "tableFrom": "jobs",
+          "tableTo": "batches",
+          "columnsFrom": ["batch_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "jobs_bot_id_bots_id_fk": {
+          "name": "jobs_bot_id_bots_id_fk",
+          "tableFrom": "jobs",
+          "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "jobs_id_uuid_v4": {
+          "name": "jobs_id_uuid_v4",
+          "value": "length(\"jobs\".\"id\") = 36\n      AND substr(\"jobs\".\"id\", 9, 1) = '-'\n      AND substr(\"jobs\".\"id\", 14, 1) = '-'\n      AND substr(\"jobs\".\"id\", 15, 1) = '4'\n      AND substr(\"jobs\".\"id\", 19, 1) = '-'\n      AND substr(\"jobs\".\"id\", 20, 1) IN ('8', '9', 'a', 'b')\n      AND substr(\"jobs\".\"id\", 24, 1) = '-'\n      AND \"jobs\".\"id\" = lower(\"jobs\".\"id\")\n      AND length(replace(\"jobs\".\"id\", '-', '')) = 32\n      AND \"jobs\".\"id\" NOT GLOB '*[^0-9a-f-]*'"
+        },
+        "jobs_status_enum": {
+          "name": "jobs_status_enum",
+          "value": "\"jobs\".\"status\" IN (\n        'queued', 'leased', 'retry_wait', 'succeeded', 'failed',\n        'deadline_exceeded', 'cancelled'\n      )"
+        },
+        "jobs_batch_order_consistent": {
+          "name": "jobs_batch_order_consistent",
+          "value": "(\"jobs\".\"batch_id\" IS NULL AND \"jobs\".\"batch_order\" IS NULL)\n        OR (\"jobs\".\"batch_id\" IS NOT NULL AND \"jobs\".\"batch_order\" >= 0)"
+        },
+        "jobs_lease_consistent": {
+          "name": "jobs_lease_consistent",
+          "value": "(\"jobs\".\"status\" = 'leased' AND \"jobs\".\"owner_id\" IS NOT NULL AND \"jobs\".\"lease_until\" IS NOT NULL)\n        OR (\"jobs\".\"status\" <> 'leased' AND \"jobs\".\"owner_id\" IS NULL AND \"jobs\".\"lease_until\" IS NULL)"
+        },
+        "jobs_lease_generation_nonnegative": {
+          "name": "jobs_lease_generation_nonnegative",
+          "value": "\"jobs\".\"lease_generation\" >= 0"
+        },
+        "jobs_attempt_count_nonnegative": {
+          "name": "jobs_attempt_count_nonnegative",
+          "value": "\"jobs\".\"attempt_count\" >= 0"
+        },
+        "jobs_error_retryable_boolean": {
+          "name": "jobs_error_retryable_boolean",
+          "value": "\"jobs\".\"error_retryable\" IS NULL OR \"jobs\".\"error_retryable\" IN (0, 1)"
+        },
+        "jobs_recipient_encrypted": {
+          "name": "jobs_recipient_encrypted",
+          "value": "\"jobs\".\"recipient_encrypted\" LIKE 'v1.%'"
+        },
+        "jobs_text_encrypted": {
+          "name": "jobs_text_encrypted",
+          "value": "\"jobs\".\"text_encrypted\" LIKE 'v1.%'"
+        },
+        "jobs_context_token_encrypted": {
+          "name": "jobs_context_token_encrypted",
+          "value": "\"jobs\".\"context_token_encrypted\" LIKE 'v1.%'"
+        },
+        "jobs_recipient_lookup_sha256": {
+          "name": "jobs_recipient_lookup_sha256",
+          "value": "length(\"jobs\".\"recipient_lookup_hash\") = 64 AND \"jobs\".\"recipient_lookup_hash\" NOT GLOB '*[^0-9a-f]*'"
+        },
+        "jobs_timestamps_nonnegative": {
+          "name": "jobs_timestamps_nonnegative",
+          "value": "\"jobs\".\"created_at\" >= 0\n        AND \"jobs\".\"updated_at\" >= \"jobs\".\"created_at\"\n        AND \"jobs\".\"admission_estimated_at\" >= 0\n        AND \"jobs\".\"retry_not_before\" >= 0\n        AND \"jobs\".\"deadline_at\" >= \"jobs\".\"created_at\"\n        AND (\"jobs\".\"lease_until\" IS NULL OR \"jobs\".\"lease_until\" >= 0)\n        AND (\"jobs\".\"completed_at\" IS NULL OR \"jobs\".\"completed_at\" >= \"jobs\".\"created_at\")"
+        }
+      }
+    },
+    "rate_state": {
+      "name": "rate_state",
+      "columns": {
+        "bot_id": {
+          "name": "bot_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_attempt_at": {
+          "name": "last_attempt_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "next_eligible_at": {
+          "name": "next_eligible_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "0"
+        },
+        "cooldown_until": {
+          "name": "cooldown_until",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "0"
+        },
+        "consecutive_rate_limits": {
+          "name": "consecutive_rate_limits",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "rate_state_bot_id_bots_id_fk": {
+          "name": "rate_state_bot_id_bots_id_fk",
+          "tableFrom": "rate_state",
+          "tableTo": "bots",
+          "columnsFrom": ["bot_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "rate_state_nonnegative": {
+          "name": "rate_state_nonnegative",
+          "value": "(\"rate_state\".\"last_attempt_at\" IS NULL OR \"rate_state\".\"last_attempt_at\" >= 0)\n        AND \"rate_state\".\"next_eligible_at\" >= 0\n        AND \"rate_state\".\"cooldown_until\" >= 0\n        AND \"rate_state\".\"consecutive_rate_limits\" >= 0\n        AND \"rate_state\".\"updated_at\" >= 0"
+        }
+      }
+    },
+    "service_lease": {
+      "name": "service_lease",
+      "columns": {
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fencing_token": {
+          "name": "fencing_token",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "service_lease_singleton": {
+          "name": "service_lease_singleton",
+          "value": "\"service_lease\".\"name\" = 'primary'"
+        },
+        "service_lease_owner_uuid_v4": {
+          "name": "service_lease_owner_uuid_v4",
+          "value": "length(\"service_lease\".\"owner_id\") = 36\n      AND substr(\"service_lease\".\"owner_id\", 9, 1) = '-'\n      AND substr(\"service_lease\".\"owner_id\", 14, 1) = '-'\n      AND substr(\"service_lease\".\"owner_id\", 15, 1) = '4'\n      AND substr(\"service_lease\".\"owner_id\", 19, 1) = '-'\n      AND substr(\"service_lease\".\"owner_id\", 20, 1) IN ('8', '9', 'a', 'b')\n      AND substr(\"service_lease\".\"owner_id\", 24, 1) = '-'\n      AND \"service_lease\".\"owner_id\" = lower(\"service_lease\".\"owner_id\")\n      AND length(replace(\"service_lease\".\"owner_id\", '-', '')) = 32\n      AND \"service_lease\".\"owner_id\" NOT GLOB '*[^0-9a-f-]*'"
+        },
+        "service_lease_fencing_positive": {
+          "name": "service_lease_fencing_positive",
+          "value": "\"service_lease\".\"fencing_token\" >= 1"
+        },
+        "service_lease_timestamps_nonnegative": {
+          "name": "service_lease_timestamps_nonnegative",
+          "value": "\"service_lease\".\"expires_at\" >= 0 AND \"service_lease\".\"updated_at\" >= 0"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}
