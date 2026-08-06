@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm"
+import { and, asc, eq, inArray, lte, sql } from "drizzle-orm"
 
 import type {
   AdmissionInput,
@@ -108,7 +108,7 @@ export class DrizzleQueueRepository implements QueueRepository {
           .get()
         if (
           head === undefined ||
-          head.status === "leased" ||
+          (head.status === "leased" && (head.leaseUntil === null || head.leaseUntil > input.now)) ||
           head.retryNotBefore > input.now ||
           head.deadlineAt <= input.now
         ) {
@@ -123,7 +123,14 @@ export class DrizzleQueueRepository implements QueueRepository {
             leaseUntil: input.leaseUntil,
             updatedAt: input.now,
           })
-          .where(eq(jobs.id, head.id))
+          .where(
+            and(
+              eq(jobs.id, head.id),
+              eq(jobs.status, head.status),
+              eq(jobs.leaseGeneration, head.leaseGeneration),
+              head.status === "leased" ? lte(jobs.leaseUntil, input.now) : undefined,
+            ),
+          )
           .returning()
           .get()
         if (claimed === undefined) {
