@@ -9,7 +9,7 @@ import {
   calculateAdmissionRetryAfter,
   calculateRateInterval,
 } from "../rate/policy"
-import { TransactionalRateRepository } from "../rate/repository"
+import { type QueueTransaction, TransactionalRateRepository } from "../rate/repository"
 import {
   type AdmissionResult,
   IDEMPOTENCY_TTL_MS,
@@ -28,15 +28,27 @@ class QueuePersistenceError extends Error {
   readonly name = "QueuePersistenceError"
 }
 
+type AdmissionDependencies = {
+  readonly database: ClawbotDatabase
+  readonly cipher: FieldCipher
+  readonly clock: QueueClock
+}
+
+type IdempotencyLookup = {
+  readonly transaction: QueueTransaction
+  readonly scope: string
+  readonly keyHash: string
+  readonly requestDigest: string
+  readonly now: ReturnType<QueueClock["now"]>
+}
+
 export function admit(
-  database: ClawbotDatabase,
-  cipher: FieldCipher,
-  clock: QueueClock,
+  dependencies: AdmissionDependencies,
   command: SingleAdmissionCommand,
 ): AdmissionResult {
-  return database.transaction(
+  return dependencies.database.transaction(
     (transaction) => {
-      const now = clock.now()
+      const now = dependencies.clock.now()
       const scope = command.idempotencyKey === null ? null : `single:${command.botId}`
       const keyHash =
         command.idempotencyKey === null ? null : hashIdempotencyKey(command.idempotencyKey)
@@ -46,7 +58,7 @@ export function admit(
           : createSingleRequestDigest(command.recipient, command.text)
 
       if (scope !== null && keyHash !== null && requestDigest !== null) {
-        const replay = resolveIdempotency(transaction, scope, keyHash, requestDigest, now)
+        const replay = resolveIdempotency({ transaction, scope, keyHash, requestDigest, now })
         if (replay !== null) {
           return replay
         }
@@ -93,13 +105,13 @@ export function admit(
         .orderBy(desc(jobs.admissionEstimatedAt), desc(jobs.createdAt), desc(jobs.id))
         .limit(1)
         .get()
-      const estimatedAt = calculateAdmissionEstimate(
+      const estimatedAt = calculateAdmissionEstimate({
         now,
-        rate.nextEligibleAt,
-        rate.cooldownUntil,
-        tail?.admissionEstimatedAt ?? null,
+        nextEligibleAt: rate.nextEligibleAt,
+        cooldownUntil: rate.cooldownUntil,
+        tailEstimatedAt: tail?.admissionEstimatedAt ?? null,
         intervalMs,
-      )
+      })
       const deadlineAt = EpochMillisecondsSchema.parse(now + JOB_DEADLINE_MS)
       if (estimatedAt + MINIMUM_ATTEMPT_BUDGET_MS > deadlineAt) {
         return {
@@ -126,7 +138,7 @@ export function admit(
           updatedAt: now,
         })
         .run()
-      const encrypted = encryptJobFields(cipher, command)
+      const encrypted = encryptJobFields(dependencies.cipher, command)
       const row = transaction
         .insert(jobs)
         .values({
@@ -149,37 +161,34 @@ export function admit(
       if (row === undefined) {
         throw new QueuePersistenceError("admitted job insert returned no row")
       }
-      return { kind: "admitted", job: mapJob(row, cipher) }
+      return { kind: "admitted", job: mapJob(row, dependencies.cipher) }
     },
     { behavior: "immediate" },
   )
 }
 
-function resolveIdempotency(
-  transaction: Parameters<Parameters<ClawbotDatabase["transaction"]>[0]>[0],
-  scope: string,
-  keyHash: string,
-  requestDigest: string,
-  now: ReturnType<QueueClock["now"]>,
-): AdmissionResult | null {
-  const existing = transaction
+function resolveIdempotency(input: IdempotencyLookup): AdmissionResult | null {
+  const existing = input.transaction
     .select()
     .from(invocations)
     .where(
-      and(eq(invocations.idempotencyScope, scope), eq(invocations.idempotencyKeyHash, keyHash)),
+      and(
+        eq(invocations.idempotencyScope, input.scope),
+        eq(invocations.idempotencyKeyHash, input.keyHash),
+      ),
     )
     .get()
   if (existing === undefined) {
     return null
   }
-  if (existing.createdAt + IDEMPOTENCY_TTL_MS <= now) {
-    transaction.delete(invocations).where(eq(invocations.id, existing.id)).run()
+  if (existing.createdAt + IDEMPOTENCY_TTL_MS <= input.now) {
+    input.transaction.delete(invocations).where(eq(invocations.id, existing.id)).run()
     return null
   }
-  if (existing.requestDigest !== requestDigest) {
+  if (existing.requestDigest !== input.requestDigest) {
     return { kind: "idempotency_conflict", invocationId: existing.id }
   }
-  const job = transaction
+  const job = input.transaction
     .select({ id: jobs.id })
     .from(jobs)
     .where(eq(jobs.invocationId, existing.id))

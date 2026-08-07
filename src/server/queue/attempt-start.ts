@@ -21,6 +21,15 @@ import { hasServiceFence } from "./fence"
 
 const NONTERMINAL_JOB_STATUSES = ["queued", "leased", "retry_wait"] as const
 
+type TerminalizeInput = {
+  readonly transaction: Parameters<Parameters<ClawbotDatabase["transaction"]>[0]>[0]
+  readonly job: typeof jobs.$inferSelect
+  readonly lease: PrepareAttemptCommand
+  readonly now: ReturnType<QueueClock["now"]>
+  readonly httpStatus: 429 | 504
+  readonly retryAfter: number | null
+}
+
 export function prepareAttempt(
   database: ClawbotDatabase,
   clock: QueueClock,
@@ -71,7 +80,7 @@ export function prepareAttempt(
       )
 
       if (job.deadlineAt <= now) {
-        terminalize(transaction, job, input, now, 504, null)
+        terminalize({ transaction, job, lease: input, now, httpStatus: 504, retryAfter: null })
         return {
           kind: "terminal",
           intervalMs,
@@ -114,7 +123,7 @@ export function prepareAttempt(
               now,
             )
           : null
-        terminalize(transaction, job, input, now, httpStatus, retryAfter)
+        terminalize({ transaction, job, lease: input, now, httpStatus, retryAfter })
         return {
           kind: "terminal",
           intervalMs,
@@ -189,38 +198,31 @@ function currentLeaseWhere(input: PrepareAttemptCommand, now: ReturnType<QueueCl
   )
 }
 
-function terminalize(
-  transaction: Parameters<Parameters<ClawbotDatabase["transaction"]>[0]>[0],
-  job: typeof jobs.$inferSelect,
-  input: PrepareAttemptCommand,
-  now: ReturnType<QueueClock["now"]>,
-  httpStatus: 429 | 504,
-  retryAfter: number | null,
-): void {
-  const status = httpStatus === 429 ? "failed" : "deadline_exceeded"
-  transaction
+function terminalize(input: TerminalizeInput): void {
+  const status = input.httpStatus === 429 ? "failed" : "deadline_exceeded"
+  input.transaction
     .update(jobs)
     .set({
       status,
       ownerId: null,
       leaseUntil: null,
-      resultHttpStatus: httpStatus,
-      errorCode: httpStatus === 429 ? "rate_limited" : "deadline_exceeded",
+      resultHttpStatus: input.httpStatus,
+      errorCode: input.httpStatus === 429 ? "rate_limited" : "deadline_exceeded",
       errorRetryable: false,
-      completedAt: now,
-      updatedAt: now,
+      completedAt: input.now,
+      updatedAt: input.now,
     })
-    .where(currentLeaseWhere(input, now))
+    .where(currentLeaseWhere(input.lease, input.now))
     .run()
-  transaction
+  input.transaction
     .update(invocations)
     .set({
       status,
-      responseHttpStatus: httpStatus,
-      responseRetryAfter: retryAfter,
-      completedAt: now,
-      updatedAt: now,
+      responseHttpStatus: input.httpStatus,
+      responseRetryAfter: input.retryAfter,
+      completedAt: input.now,
+      updatedAt: input.now,
     })
-    .where(eq(invocations.id, job.invocationId))
+    .where(eq(invocations.id, input.job.invocationId))
     .run()
 }

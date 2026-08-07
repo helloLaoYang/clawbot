@@ -47,7 +47,7 @@ export class DrizzleQueueRepository implements QueueRepository {
   }
 
   admit(input: SingleAdmissionCommand): AdmissionResult {
-    return admit(this.database, this.cipher, this.clock, input)
+    return admit({ database: this.database, cipher: this.cipher, clock: this.clock }, input)
   }
 
   claimNext(input: ClaimInput): JobRecord | null {
@@ -55,7 +55,7 @@ export class DrizzleQueueRepository implements QueueRepository {
   }
 
   claim(input: ClaimCommand): ClaimResult {
-    return claim(this.database, this.cipher, this.clock, input)
+    return claim({ database: this.database, cipher: this.cipher, clock: this.clock }, input)
   }
 
   prepareAttempt(input: PrepareAttemptCommand): PrepareAttemptResult {

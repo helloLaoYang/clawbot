@@ -31,6 +31,14 @@ export type Cooldown = {
   readonly consecutiveRateLimits: number
 }
 
+export type AdmissionEstimateInput = {
+  readonly now: EpochMilliseconds
+  readonly nextEligibleAt: EpochMilliseconds
+  readonly cooldownUntil: EpochMilliseconds
+  readonly tailEstimatedAt: EpochMilliseconds | null
+  readonly intervalMs: number
+}
+
 export function calculateRateInterval(configured: number, currentCeiling: number): number {
   return Math.ceil(MILLISECONDS_PER_MINUTE / Math.min(configured, currentCeiling))
 }
@@ -50,15 +58,11 @@ export function calculateEligibility(input: EligibilityInput): Eligibility {
   }
 }
 
-export function calculateAdmissionEstimate(
-  now: EpochMilliseconds,
-  nextEligibleAt: EpochMilliseconds,
-  cooldownUntil: EpochMilliseconds,
-  tailEstimatedAt: EpochMilliseconds | null,
-  intervalMs: number,
-): EpochMilliseconds {
-  const tailBoundary = tailEstimatedAt === null ? 0 : tailEstimatedAt + intervalMs
-  return EpochMillisecondsSchema.parse(Math.max(now, nextEligibleAt, cooldownUntil, tailBoundary))
+export function calculateAdmissionEstimate(input: AdmissionEstimateInput): EpochMilliseconds {
+  const tailBoundary = input.tailEstimatedAt === null ? 0 : input.tailEstimatedAt + input.intervalMs
+  return EpochMillisecondsSchema.parse(
+    Math.max(input.now, input.nextEligibleAt, input.cooldownUntil, tailBoundary),
+  )
 }
 
 export function calculateAdmissionRetryAfter(

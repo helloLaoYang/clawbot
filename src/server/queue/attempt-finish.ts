@@ -13,6 +13,14 @@ import type {
 } from "./contracts"
 import { hasServiceFence } from "./fence"
 
+type RateOutcomeInput = {
+  readonly repository: TransactionalRateRepository
+  readonly state: ReturnType<TransactionalRateRepository["get"]>
+  readonly classification: FailureClassification
+  readonly now: ReturnType<QueueClock["now"]>
+  readonly retryAfter: string | null
+}
+
 export function recordFailure(
   database: ClawbotDatabase,
   clock: QueueClock,
@@ -50,13 +58,13 @@ export function recordFailure(
 
       const rateRepository = new TransactionalRateRepository(transaction)
       const storedRate = rateRepository.get(job.botId)
-      const rate = applyRateOutcome(
-        rateRepository,
-        storedRate,
-        input.classification,
+      const rate = applyRateOutcome({
+        repository: rateRepository,
+        state: storedRate,
+        classification: input.classification,
         now,
-        input.retryAfter,
-      )
+        retryAfter: input.retryAfter,
+      })
       const retryNotBefore = EpochMillisecondsSchema.parse(
         Math.max(now + input.backoffMs, rate.cooldownUntil),
       )
@@ -168,25 +176,19 @@ export function finalizeSuccess(
   )
 }
 
-function applyRateOutcome(
-  repository: TransactionalRateRepository,
-  state: ReturnType<TransactionalRateRepository["get"]>,
-  classification: FailureClassification,
-  now: ReturnType<QueueClock["now"]>,
-  retryAfter: string | null,
-) {
-  switch (classification) {
+function applyRateOutcome(input: RateOutcomeInput) {
+  switch (input.classification) {
     case "rate_limited":
-      return repository.recordRateLimit(state, now, retryAfter)
+      return input.repository.recordRateLimit(input.state, input.now, input.retryAfter)
     case "network":
     case "timeout":
     case "upstream_http":
     case "upstream_protocol":
     case "reauth_required":
-      return state
+      return input.state
     default:
-      classification satisfies never
-      return state
+      input.classification satisfies never
+      return input.state
   }
 }
 

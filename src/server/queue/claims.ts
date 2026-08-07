@@ -16,15 +16,16 @@ import { mapJob } from "./persistence"
 
 const NONTERMINAL_JOB_STATUSES = ["queued", "leased", "retry_wait"] as const
 
-export function claim(
-  database: ClawbotDatabase,
-  cipher: FieldCipher,
-  clock: QueueClock,
-  input: ClaimCommand,
-): ClaimResult {
-  return database.transaction(
+type ClaimDependencies = {
+  readonly database: ClawbotDatabase
+  readonly cipher: FieldCipher
+  readonly clock: QueueClock
+}
+
+export function claim(dependencies: ClaimDependencies, input: ClaimCommand): ClaimResult {
+  return dependencies.database.transaction(
     (transaction) => {
-      const now = clock.now()
+      const now = dependencies.clock.now()
       if (!hasServiceFence(transaction, input.serviceFence, now)) {
         return { kind: "service_fence_lost" }
       }
@@ -86,7 +87,7 @@ export function claim(
         .set({ status: "leased", updatedAt: now })
         .where(eq(invocations.id, claimed.invocationId))
         .run()
-      return { kind: "claimed", job: mapJob(claimed, cipher) }
+      return { kind: "claimed", job: mapJob(claimed, dependencies.cipher) }
     },
     { behavior: "immediate" },
   )
