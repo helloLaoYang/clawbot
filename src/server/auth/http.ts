@@ -4,7 +4,17 @@ import type { AdminSessionToken } from "../crypto/admin-auth"
 
 export const ADMIN_SESSION_COOKIE_NAME = "clawbot_admin_session" as const
 
-type ErrorCode = "invalid_json" | "rate_limited" | "unauthorized"
+type ErrorCode =
+  | "deadline_exceeded"
+  | "invalid_json"
+  | "invalid_state"
+  | "not_found"
+  | "qr_expired"
+  | "qr_poll_in_progress"
+  | "rate_limited"
+  | "unauthorized"
+  | "upstream_failed"
+  | "validation_failed"
 type ErrorResponseOptions = Readonly<{
   bearerChallenge?: boolean
   retryAfterSeconds?: number
@@ -12,9 +22,16 @@ type ErrorResponseOptions = Readonly<{
 }>
 
 const ERROR_MESSAGES = {
+  deadline_exceeded: "Upstream request deadline exceeded",
   invalid_json: "Invalid request",
+  invalid_state: "Request is invalid for the current state",
+  not_found: "Not found",
+  qr_expired: "QR session expired",
+  qr_poll_in_progress: "QR poll already in progress",
   rate_limited: "Too many requests",
   unauthorized: "Unauthorized",
+  upstream_failed: "Upstream request failed",
+  validation_failed: "Request validation failed",
 } as const satisfies Record<ErrorCode, string>
 
 function responseHeaders(requestId: string): Headers {
@@ -50,8 +67,8 @@ export function createErrorResponse(
   )
 }
 
-export function createJsonResponse(body: Readonly<Record<string, unknown>>): Response {
-  return Response.json(body, { headers: responseHeaders(randomUUID()) })
+export function createJsonResponse(body: unknown, status = 200): Response {
+  return Response.json(body, { headers: responseHeaders(randomUUID()), status })
 }
 
 export function createEmptyResponse(status: 204, setCookie?: string): Response {
