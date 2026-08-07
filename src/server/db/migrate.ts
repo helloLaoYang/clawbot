@@ -1,9 +1,11 @@
-import { fileURLToPath } from "node:url"
+import { createHash } from "node:crypto"
+import { readFileSync } from "node:fs"
 
 import Database from "better-sqlite3"
-import { type MigrationMeta, readMigrationFiles } from "drizzle-orm/migrator"
+import type { MigrationMeta } from "drizzle-orm/migrator"
 
 import { DatabaseInvariantError } from "./invariants"
+import migrationJournal from "./migrations/meta/_journal.json"
 
 type MigrationRow = {
   readonly id: number
@@ -31,7 +33,12 @@ export type MigrationResult = {
   readonly initialized: boolean
 }
 
-const MIGRATIONS_FOLDER = fileURLToPath(new URL("./migrations", import.meta.url))
+const MIGRATION_SOURCES = [
+  {
+    sql: readFileSync(new URL("./migrations/0000_durable_model.sql", import.meta.url), "utf8"),
+    tag: "0000_durable_model",
+  },
+] as const
 const EXPECTED_MIGRATION_COLUMNS = [
   { id: 0, name: "id", type: "INTEGER", required: 0, defaultValue: null, primaryKey: 1 },
   { id: 1, name: "hash", type: "TEXT", required: 1, defaultValue: null, primaryKey: 0 },
@@ -47,7 +54,7 @@ const EXPECTED_MIGRATION_COLUMNS = [
 
 export function migrateDatabase(client: Database.Database): MigrationResult {
   try {
-    const migrations = readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER })
+    const migrations = readBundledMigrations()
     const apply = client.transaction(() => {
       client.exec(`CREATE TABLE IF NOT EXISTS __drizzle_migrations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +83,24 @@ export function migrateDatabase(client: Database.Database): MigrationResult {
     }
     throw new DatabaseInvariantError("migration", "database migration failed", { cause: error })
   }
+}
+
+function readBundledMigrations(): readonly MigrationMeta[] {
+  if (migrationJournal.entries.length !== MIGRATION_SOURCES.length) {
+    throw new DatabaseInvariantError("migration", "migration sources do not match journal")
+  }
+  return migrationJournal.entries.map((entry, index) => {
+    const source = MIGRATION_SOURCES[index]
+    if (source === undefined || entry.idx !== index || entry.tag !== source.tag) {
+      throw new DatabaseInvariantError("migration", "migration sources do not match journal")
+    }
+    return {
+      bps: entry.breakpoints,
+      folderMillis: entry.when,
+      hash: createHash("sha256").update(source.sql).digest("hex"),
+      sql: source.sql.split("--> statement-breakpoint"),
+    }
+  })
 }
 
 function readAppliedMigrations(client: Database.Database): readonly MigrationRow[] {
