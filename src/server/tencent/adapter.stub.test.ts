@@ -134,6 +134,45 @@ describe("Tencent local protocol stub", () => {
     },
   )
 
+  it.each([
+    ["errcode_-14", { kind: "reauth_required", errcode: -14 }],
+    ["errcode_73", { kind: "upstream_protocol", reason: "nonzero_errcode", errcode: 73 }],
+  ] satisfies readonly (readonly [
+    "errcode_-14" | "errcode_73",
+    Readonly<{
+      kind: "reauth_required" | "upstream_protocol"
+      errcode: number
+      reason?: "nonzero_errcode"
+    }>,
+  ])[])("maps local stub mode %s from Tencent errcode", async (mode, expectedDetails) => {
+    const stub = await startTencentStub()
+    stub.setMode(mode)
+    const adapter = createTencentIlinkAdapter({
+      transport: createTencentStubTransport(stub.origin),
+    })
+
+    try {
+      const pending =
+        mode === "errcode_-14"
+          ? adapter.getUpdates({
+              credentials: credentials("stub-bot-token"),
+              getUpdatesBuffer: "stub-cursor-before",
+            })
+          : adapter.sendMessage({
+              clientId: "stub-errcode-client-id",
+              contextToken: "stub-context",
+              credentials: credentials("stub-bot-token"),
+              recipient: "stub-user@im.wechat",
+              text: "classify local errcode",
+            })
+
+      await expect(pending).rejects.toMatchObject({ details: expectedDetails })
+      expect(stub.requests).toHaveLength(1)
+    } finally {
+      await stub.close()
+    }
+  })
+
   it("maps a real local stalled response to the exact 15 second timeout variant", async () => {
     // Given: a local server that accepts the request but never responds.
     const stub = await startTencentStub()

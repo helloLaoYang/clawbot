@@ -10,6 +10,8 @@ export const TENCENT_STUB_MODES = [
   "timeout",
   "ret_-14",
   "ret_-2",
+  "errcode_-14",
+  "errcode_73",
   "malformed",
   "redirect",
 ] as const
@@ -73,6 +75,12 @@ function sendMode(response: ServerResponse, mode: TencentStubMode): boolean {
       return true
     case "ret_-2":
       sendJson(response, 200, { ret: -2 })
+      return true
+    case "errcode_-14":
+      sendJson(response, 200, { ret: 0, errcode: -14 })
+      return true
+    case "errcode_73":
+      sendJson(response, 200, { ret: 0, errcode: 73 })
       return true
     case "malformed":
       response.writeHead(200, { "content-type": "application/json" })
