@@ -49,5 +49,6 @@ export interface RuntimeRepository {
   acquireServiceLease(input: AcquireServiceLeaseInput): ServiceLease | null
   renewServiceLease(input: RenewServiceLeaseInput): boolean
   getAdminLoginState(): AdminLoginState
+  updateAdminLoginState(update: (state: AdminLoginState) => AdminLoginState): AdminLoginState
   saveAdminLoginState(state: AdminLoginState): void
 }

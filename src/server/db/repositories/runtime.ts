@@ -82,12 +82,26 @@ export class DrizzleRuntimeRepository implements RuntimeRepository {
     if (row === undefined) {
       throw new DatabaseStateError("admin login state is missing")
     }
-    return {
-      failedAttempts: row.failedAttempts,
-      windowStartedAt: row.windowStartedAt,
-      lockedUntil: row.lockedUntil,
-      updatedAt: row.updatedAt,
-    }
+    return mapAdminLoginState(row)
+  }
+
+  updateAdminLoginState(update: (state: AdminLoginState) => AdminLoginState): AdminLoginState {
+    return this.database.transaction(
+      (transaction) => {
+        const row = transaction
+          .select()
+          .from(adminLoginState)
+          .where(eq(adminLoginState.id, 1))
+          .get()
+        if (row === undefined) {
+          throw new DatabaseStateError("admin login state is missing")
+        }
+        const state = update(mapAdminLoginState(row))
+        transaction.update(adminLoginState).set(state).where(eq(adminLoginState.id, 1)).run()
+        return state
+      },
+      { behavior: "immediate" },
+    )
   }
 
   saveAdminLoginState(state: AdminLoginState): void {
@@ -103,5 +117,14 @@ export class DrizzleRuntimeRepository implements RuntimeRepository {
           .run(),
       { behavior: "immediate" },
     )
+  }
+}
+
+function mapAdminLoginState(row: typeof adminLoginState.$inferSelect): AdminLoginState {
+  return {
+    failedAttempts: row.failedAttempts,
+    windowStartedAt: row.windowStartedAt,
+    lockedUntil: row.lockedUntil,
+    updatedAt: row.updatedAt,
   }
 }
