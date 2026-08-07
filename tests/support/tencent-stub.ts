@@ -3,6 +3,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 
 import axios, { type AxiosAdapter } from "axios"
 
+import type { QrStatusResponse } from "../../src/server/tencent/protocol"
+
 export const TENCENT_STUB_MODES = [
   "ok",
   "http_429",
@@ -29,10 +31,13 @@ export type TencentStub = {
   readonly requests: readonly TencentStubRequest[]
   readonly close: () => Promise<void>
   readonly setMode: (mode: TencentStubMode) => void
+  readonly setQrStatuses: (statuses: readonly QrStatusResponse[]) => void
 }
 
 type TencentStubState = {
   mode: TencentStubMode
+  qrSequence: number
+  qrStatuses: QrStatusResponse[]
   requests: TencentStubRequest[]
 }
 
@@ -112,20 +117,26 @@ async function handleRequest(
     return
   }
   if (method === "POST" && path === "/ilink/bot/get_bot_qrcode?bot_type=3") {
+    state.qrSequence += 1
+    const suffix = state.qrSequence === 1 ? "" : `-${state.qrSequence}`
     sendJson(response, 200, {
-      qrcode: "stub-qr",
-      qrcode_img_content: "https://weixin.qq.com/x/stub-qr",
+      qrcode: `stub-qr${suffix}`,
+      qrcode_img_content: `https://weixin.qq.com/x/stub-qr${suffix}`,
     })
     return
   }
-  if (method === "GET" && path === "/ilink/bot/get_qrcode_status?qrcode=stub-qr") {
-    sendJson(response, 200, {
-      status: "confirmed",
-      bot_token: "stub-bot-token",
-      ilink_bot_id: "stub-bot@im.bot",
-      ilink_user_id: "stub-user@im.wechat",
-      baseurl: "https://ilinkai.weixin.qq.com",
-    })
+  if (method === "GET" && path.startsWith("/ilink/bot/get_qrcode_status?")) {
+    sendJson(
+      response,
+      200,
+      state.qrStatuses.shift() ?? {
+        status: "confirmed",
+        bot_token: "stub-bot-token",
+        ilink_bot_id: "stub-bot@im.bot",
+        ilink_user_id: "stub-user@im.wechat",
+        baseurl: "https://ilinkai.weixin.qq.com",
+      },
+    )
     return
   }
   if (method === "POST" && path === "/ilink/bot/getupdates") {
@@ -149,7 +160,7 @@ async function handleRequest(
 }
 
 export async function startTencentStub(): Promise<TencentStub> {
-  const state: TencentStubState = { mode: "ok", requests: [] }
+  const state: TencentStubState = { mode: "ok", qrSequence: 0, qrStatuses: [], requests: [] }
   const server = createServer((request, response) => {
     void handleRequest(request, response, state).catch((error: unknown) => {
       if (!response.headersSent) {
@@ -191,6 +202,9 @@ export async function startTencentStub(): Promise<TencentStub> {
     requests: state.requests,
     setMode: (nextMode) => {
       state.mode = nextMode
+    },
+    setQrStatuses: (statuses) => {
+      state.qrStatuses = [...statuses]
     },
   }
 }
