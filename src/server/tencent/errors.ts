@@ -2,6 +2,7 @@ import type { TencentOperation } from "./protocol"
 
 export type TencentProtocolFailure =
   | "malformed_response"
+  | "nonzero_errcode"
   | "nonzero_ret"
   | "request_too_large"
   | "response_too_large"
@@ -14,11 +15,21 @@ export type TencentErrorDetails =
   | { readonly kind: "rate_limited"; readonly source: "http"; readonly status: 429 }
   | { readonly kind: "rate_limited"; readonly source: "protocol"; readonly ret: -2 }
   | { readonly kind: "reauth_required"; readonly ret: -14 }
+  | { readonly kind: "reauth_required"; readonly errcode: -14 }
   | { readonly kind: "upstream_http"; readonly status: number }
   | {
       readonly kind: "upstream_protocol"
-      readonly reason: TencentProtocolFailure
-      readonly ret?: number
+      readonly reason: "nonzero_errcode"
+      readonly errcode: number
+    }
+  | {
+      readonly kind: "upstream_protocol"
+      readonly reason: "nonzero_ret"
+      readonly ret: number
+    }
+  | {
+      readonly kind: "upstream_protocol"
+      readonly reason: Exclude<TencentProtocolFailure, "nonzero_errcode" | "nonzero_ret">
     }
 
 const ERROR_MESSAGES = {

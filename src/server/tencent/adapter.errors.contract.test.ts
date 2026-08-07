@@ -127,6 +127,32 @@ describe("TencentIlinkAdapter failure contract", () => {
     },
   )
 
+  it("maps getUpdates errcode -14 to the typed reauth variant", async () => {
+    const reply = replyTransport(JSON.stringify({ ret: 0, errcode: -14, msgs: [] }))
+    const adapter = createTencentIlinkAdapter({ transport: reply.transport })
+
+    const error = await captureError(() =>
+      adapter.getUpdates({ credentials: credentials(), getUpdatesBuffer: "" }),
+    )
+
+    expect(error.details).toEqual({ kind: "reauth_required", errcode: -14 })
+    expect(reply.calls).toHaveLength(1)
+  })
+
+  it("maps another nonzero errcode from a ret response to a typed protocol failure", async () => {
+    const reply = replyTransport(JSON.stringify({ ret: 0, errcode: 73 }))
+    const adapter = createTencentIlinkAdapter({ transport: reply.transport })
+
+    const error = await captureError(() => send(adapter))
+
+    expect(error.details).toEqual({
+      kind: "upstream_protocol",
+      reason: "nonzero_errcode",
+      errcode: 73,
+    })
+    expect(reply.calls).toHaveLength(1)
+  })
+
   it.each([
     [AxiosError.ETIMEDOUT, "timeout"],
     [AxiosError.ECONNABORTED, "timeout"],

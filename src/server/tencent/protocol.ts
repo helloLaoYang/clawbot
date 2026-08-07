@@ -62,23 +62,22 @@ const UpdateMessageSchema = z
   })
   .readonly()
 
+const TencentRetFields = {
+  ret: z.number().int(),
+  errcode: z.number().int().optional(),
+  errmsg: z.string().optional(),
+}
+
 const GetUpdatesResponseSchema = z
   .object({
-    ret: z.number().int(),
-    errcode: z.number().int().optional(),
-    errmsg: z.string().optional(),
+    ...TencentRetFields,
     msgs: z.array(UpdateMessageSchema).readonly().default([]),
     get_updates_buf: z.string().optional(),
     longpolling_timeout_ms: z.number().int().nonnegative().optional(),
   })
   .readonly()
 
-const RetResponseSchema = z
-  .object({
-    ret: z.number().int(),
-    errmsg: z.string().optional(),
-  })
-  .readonly()
+const RetResponseSchema = z.object(TencentRetFields).readonly()
 
 export type QrCodeResponse = z.infer<typeof QrCodeResponseSchema>
 export type QrStatusResponse = z.infer<typeof QrStatusSchema>

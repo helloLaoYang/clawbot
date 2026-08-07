@@ -78,6 +78,16 @@ export function assertSuccessfulTencentRet(
   operation: TencentOperation,
   response: RetResponse,
 ): void {
+  if (response.errcode !== undefined && response.errcode !== 0) {
+    if (response.errcode === -14) {
+      throw new TencentIlinkError(operation, { kind: "reauth_required", errcode: -14 })
+    }
+    throw new TencentIlinkError(operation, {
+      kind: "upstream_protocol",
+      reason: "nonzero_errcode",
+      errcode: response.errcode,
+    })
+  }
   if (response.ret === 0) {
     return
   }
