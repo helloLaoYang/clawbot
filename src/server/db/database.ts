@@ -13,6 +13,7 @@ import {
   type SQLiteVersionReader,
 } from "./invariants"
 import { migrateDatabase } from "./migrate"
+import type { QrBotRepository } from "./qr-contracts"
 import { DrizzleBotRepository } from "./repositories/bots"
 import { DrizzleConversationRepository } from "./repositories/contexts"
 import type {
@@ -22,6 +23,7 @@ import type {
   QueueRepository,
   RuntimeRepository,
 } from "./repositories/contracts"
+import { DrizzleQrBotRepository } from "./repositories/qr-bots"
 import { DrizzleQueueRepository } from "./repositories/queue"
 import { DrizzleRuntimeRepository } from "./repositories/runtime"
 import { DrizzleBotStateRepository } from "./repositories/state"
@@ -50,6 +52,7 @@ export type DatabaseHandle = {
   readonly contexts: ConversationRepository
   readonly state: BotStateRepository
   readonly queue: QueueRepository
+  readonly qrBots: QrBotRepository
   readonly runtime: RuntimeRepository
   readonly close: () => void
 }
@@ -93,6 +96,7 @@ export function openDatabase(options: OpenDatabaseOptions): DatabaseHandle {
       contexts: new DrizzleConversationRepository(orm, options.cipher),
       state: new DrizzleBotStateRepository(orm, options.cipher),
       queue: new DrizzleQueueRepository(orm, options.cipher),
+      qrBots: new DrizzleQrBotRepository(orm, options.cipher),
       runtime: new DrizzleRuntimeRepository(orm),
       close: () => client.close(),
     }
