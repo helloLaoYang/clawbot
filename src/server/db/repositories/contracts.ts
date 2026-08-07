@@ -1,21 +1,19 @@
 import type {
   AcquireServiceLeaseInput,
   AdminLoginState,
-  AdmissionInput,
   BotCredentials,
   BotRecord,
-  ClaimInput,
   ConversationContext,
   CreateBotInput,
   InboundStateRecord,
-  JobRecord,
   RateStateRecord,
-  RecordAttemptInput,
   RenewServiceLeaseInput,
   ServiceLease,
   UpsertContextInput,
 } from "../contracts"
-import type { BotId, BotPublicId, JobId } from "../ids"
+import type { BotId, BotPublicId } from "../ids"
+
+export type { QueueRepository } from "../../queue/contracts"
 
 export interface BotRepository {
   create(input: CreateBotInput): BotRecord
@@ -35,13 +33,6 @@ export interface BotStateRepository {
   saveInbound(state: InboundStateRecord): void
   getRate(botId: BotId): RateStateRecord | null
   saveRate(state: RateStateRecord): void
-}
-
-export interface QueueRepository {
-  admitSingle(input: AdmissionInput): JobRecord
-  claimNext(input: ClaimInput): JobRecord | null
-  findJob(jobId: JobId): JobRecord | null
-  recordAttempt(input: RecordAttemptInput): void
 }
 
 export interface RuntimeRepository {
