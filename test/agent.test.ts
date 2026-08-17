@@ -23,16 +23,44 @@ describe("AgentService", () => {
     store.close();
   });
 
-  it("resets only the requesting user's persistent memory", async () => {
+  it("clears only the requesting user's memory after a second confirmation", async () => {
     const store = makeStore(); seedCredential(store); const model = new StubModel(); const api = new StubWeixinApi();
     const agent = new AgentService(store, new ContextEngine(store, model, contextConfig), api, 4);
     await agent.handle("account-1", message("alice", "a1", "hello"));
     await agent.handle("account-1", message("bob", "b1", "hello"));
-    await agent.handle("account-1", message("alice", "a2", "/reset"));
+    await agent.handle("account-1", message("alice", "a2", "/clear"));
+    expect(store.listMessagesAfter("account-1", "alice", null)).toHaveLength(2);
+    expect(api.sent.at(-1)?.text).toContain("再次发送 /clear");
+    await agent.handle("account-1", message("alice", "a3", "/clear"));
     expect(store.listMessagesAfter("account-1", "alice", null)).toHaveLength(0);
     expect(store.listMessagesAfter("account-1", "bob", null)).toHaveLength(2);
     expect(model.generateRequests).toHaveLength(2);
     expect(api.sent.at(-1)?.text).toContain("已清除");
+    store.close();
+  });
+
+  it("handles help without calling the model and disables the old reset bypass", async () => {
+    const store = makeStore(); seedCredential(store); const model = new StubModel(); const api = new StubWeixinApi();
+    const agent = new AgentService(store, new ContextEngine(store, model, contextConfig), api, 4);
+    await agent.handle("account-1", message("alice", "h1", "/help"));
+    await agent.handle("account-1", message("alice", "h2", "/reset"));
+    expect(model.generateRequests).toHaveLength(0);
+    expect(api.sent[0]?.text).toContain("/compact");
+    expect(api.sent[1]?.text).toContain("/reset 已停用");
+    store.close();
+  });
+
+  it("manually compacts all uncompressed messages while retaining raw history", async () => {
+    const store = makeStore(); seedCredential(store); const model = new StubModel(); const api = new StubWeixinApi();
+    const agent = new AgentService(store, new ContextEngine(store, model, contextConfig), api, 4);
+    await agent.handle("account-1", message("alice", "m1", "hello"));
+    await agent.handle("account-1", message("alice", "m2", "world"));
+    await agent.handle("account-1", message("alice", "m3", "/compact"));
+    expect(model.summarizeRequests).toEqual([{ summary: "", count: 4 }]);
+    expect(store.getConversation("account-1", "alice").summaryThroughMessageId).not.toBeNull();
+    expect(store.listMessagesAfter("account-1", "alice", null)).toHaveLength(4);
+    expect(store.listMessagesAfter("account-1", "alice", store.getConversation("account-1", "alice").summaryThroughMessageId)).toHaveLength(0);
+    expect(api.sent.at(-1)?.text).toContain("4 条消息");
     store.close();
   });
 

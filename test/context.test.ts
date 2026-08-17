@@ -21,6 +21,18 @@ describe("ContextEngine", () => {
     store.close();
   });
 
+  it("loads persistent global persona and personalization for every response", async () => {
+    const store = makeStore(); const model = new StubModel();
+    store.updateGlobalSettings({ persona: "你叫小爪", personalization: "默认简体中文并先给结论" });
+    await new ContextEngine(store, model, contextConfig).respond("account-1", "alice", { text: "hello", images: [] });
+    expect(model.generateRequests[0]?.settings).toEqual({
+      persona: "你叫小爪",
+      personalization: "默认简体中文并先给结论",
+      updatedAt: expect.any(String),
+    });
+    store.close();
+  });
+
   it("compacts old messages, advances the boundary, and retains raw history", async () => {
     const store = makeStore(); const model = new StubModel();
     for (let index = 0; index < 4; index++) turn(store, "alice", index, "x".repeat(90));
@@ -51,10 +63,12 @@ describe("ContextEngine", () => {
     const first = new Store(path, new SecretBox(key));
     turn(first, "alice", 1); turn(first, "alice", 2);
     first.updateSummary("account-1", "alice", "durable summary", 2);
+    first.updateGlobalSettings({ persona: "durable persona", personalization: "durable preference" });
     first.close();
     const second = new Store(path, new SecretBox(key));
     expect(second.getConversation("account-1", "alice").summary).toBe("durable summary");
     expect(second.listMessagesAfter("account-1", "alice", 2)).toHaveLength(2);
+    expect(second.getGlobalSettings()).toMatchObject({ persona: "durable persona", personalization: "durable preference" });
     second.close();
   });
 

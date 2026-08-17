@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { loadEnvFile } from "node:process";
 import { pathToFileURL } from "node:url";
 import { loadConfig } from "./config.js";
 import { createRuntime } from "./runtime.js";
@@ -116,8 +117,19 @@ Usage:
 Environment:
   CLAWBOT_URL       Service URL for status/send (default http://127.0.0.1:3000)
   ADMIN_TOKEN       Token for status and fallback token for send
-  WEBHOOK_TOKEN     Token for send`;
+  WEBHOOK_TOKEN     Token for send
+
+Local usage automatically loads .env, so --token is not required.`;
+
+export function loadLocalEnvironment(loader: (path?: string) => void = loadEnvFile): void {
+  try {
+    loader(".env");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  loadLocalEnvironment();
   process.exitCode = await runCli(process.argv.slice(2));
 }

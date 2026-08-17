@@ -20,6 +20,11 @@ export type Conversation = {
   lastInputTokens: number;
   updatedAt: string;
 };
+export type GlobalSettings = {
+  personalization: string;
+  persona: string;
+  updatedAt: string | null;
+};
 export type WeixinCredential = {
   accountId: string;
   botToken: string;
@@ -89,6 +94,19 @@ export class Store {
         source_message_id TEXT NOT NULL,
         processed_at TEXT NOT NULL,
         PRIMARY KEY (account_id, source_message_id)
+      );
+      CREATE TABLE IF NOT EXISTS global_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        personalization TEXT NOT NULL DEFAULT '',
+        persona TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS command_confirmations (
+        account_id TEXT NOT NULL,
+        peer_id TEXT NOT NULL,
+        command TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        PRIMARY KEY (account_id, peer_id, command)
       );
     `);
   }
@@ -174,6 +192,25 @@ export class Store {
     });
   }
 
+  getGlobalSettings(): GlobalSettings {
+    const row = this.db.prepare("SELECT personalization,persona,updated_at FROM global_settings WHERE id=1").get() as Row | undefined;
+    if (!row) return { personalization: "", persona: "", updatedAt: null };
+    return {
+      personalization: String(row.personalization),
+      persona: String(row.persona),
+      updatedAt: String(row.updated_at),
+    };
+  }
+
+  updateGlobalSettings(settings: Pick<GlobalSettings, "personalization" | "persona">): GlobalSettings {
+    const updatedAt = now();
+    this.db.prepare(`INSERT INTO global_settings(id,personalization,persona,updated_at) VALUES (1,?,?,?)
+      ON CONFLICT(id) DO UPDATE SET personalization=excluded.personalization,persona=excluded.persona,updated_at=excluded.updated_at`).run(
+        settings.personalization, settings.persona, updatedAt,
+      );
+    return { ...settings, updatedAt };
+  }
+
   saveTurn(args: { accountId: string; peerId: string; sourceMessageId: string; userText: string; userType: "text" | "image"; assistantText: string; inputTokens: number; contextToken: string }) {
     this.transaction(() => {
       this.ensureConversation(args.accountId, args.peerId);
@@ -198,9 +235,30 @@ export class Store {
     this.transaction(() => {
       this.db.prepare("DELETE FROM conversations WHERE account_id=? AND peer_id=?").run(accountId, peerId);
       this.db.prepare("DELETE FROM peer_contexts WHERE account_id=? AND peer_id=?").run(accountId, peerId);
+      this.db.prepare("DELETE FROM command_confirmations WHERE account_id=? AND peer_id=?").run(accountId, peerId);
       const timestamp = now();
       this.savePeerContext(accountId, peerId, contextToken, timestamp);
       this.markProcessed(accountId, sourceMessageId, timestamp);
+    });
+  }
+
+  hasCommandConfirmation(accountId: string, peerId: string, command: string): boolean {
+    const timestamp = now();
+    this.db.prepare("DELETE FROM command_confirmations WHERE expires_at<=?").run(timestamp);
+    return this.db.prepare(`SELECT 1 FROM command_confirmations
+      WHERE account_id=? AND peer_id=? AND command=?`).get(accountId, peerId, command) !== undefined;
+  }
+
+  setCommandConfirmation(args: { accountId: string; peerId: string; command: string; sourceMessageId: string; contextToken: string; ttlMs: number }) {
+    this.transaction(() => {
+      const timestamp = now();
+      const expiresAt = new Date(Date.now() + args.ttlMs).toISOString();
+      this.db.prepare(`INSERT INTO command_confirmations(account_id,peer_id,command,expires_at) VALUES (?,?,?,?)
+        ON CONFLICT(account_id,peer_id,command) DO UPDATE SET expires_at=excluded.expires_at`).run(
+          args.accountId, args.peerId, args.command, expiresAt,
+        );
+      this.savePeerContext(args.accountId, args.peerId, args.contextToken, timestamp);
+      this.markProcessed(args.accountId, args.sourceMessageId, timestamp);
     });
   }
 

@@ -43,6 +43,18 @@ export function buildServer(deps: ServerDependencies): FastifyInstance {
       },
     };
   });
+  app.get("/api/admin/settings", async () => deps.store.getGlobalSettings());
+  app.put<{ Body: unknown }>("/api/admin/settings", async (request, reply) => {
+    const parsed = z.object({
+      personalization: z.string().max(20_000),
+      persona: z.string().max(20_000),
+    }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "personalization and persona must be strings no longer than 20000 characters" });
+    return deps.store.updateGlobalSettings({
+      personalization: parsed.data.personalization.trim(),
+      persona: parsed.data.persona.trim(),
+    });
+  });
   app.post("/api/admin/weixin/login-sessions", async (_request, reply) => reply.code(201).send(await deps.login.create()));
   app.get<{ Params: { id: string } }>("/api/admin/weixin/login-sessions/:id", async (request, reply) => {
     const session = deps.login.get(request.params.id);

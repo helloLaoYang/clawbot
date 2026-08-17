@@ -10,7 +10,8 @@
 - 达到上下文窗口的 `CONTEXT_COMPACT_RATIO` 时，旧摘要和旧消息会被合并为新摘要，最近 `CONTEXT_KEEP_MESSAGES` 条保留；原始消息不会删除。
 - 记忆只有聊天记录和滚动摘要，没有用户画像、向量库或结构化长期事实。
 - 图片只在当前模型请求中以 data URL 发送，数据库仅保存 `[用户发送了N张图片]`。
-- 精确发送 `/reset` 会清除该用户的对话和摘要，不影响其他用户。
+- 全局人设与个性化偏好保存在 SQLite，修改后对所有用户的下一次模型请求生效。
+- 精确发送 `/clear` 后，必须在 5 分钟内再次发送 `/clear`，才会清除该用户的对话和摘要；其他用户不受影响。
 
 ## 启动
 
@@ -53,11 +54,39 @@ pnpm run dev:watch  # 监听 src 目录并自动重启
 - `GET /readyz`
 - `GET /admin`
 - `GET /api/admin/status`
+- `GET /api/admin/settings`
+- `PUT /api/admin/settings`，JSON 为 `{ "persona": "你叫小爪", "personalization": "默认简体中文，先给结论" }`
 - `POST /api/admin/weixin/login-sessions`
 - `GET /api/admin/weixin/login-sessions/:id`
 - `POST /api/admin/weixin/login-sessions/:id/verify-code`，JSON 为 `{ "code": "123456" }`
 
 服务只处理 `message_type=USER` 的私聊。文本、图片输入和文本回复受支持；群聊会忽略；语音、文件和视频会回复不支持提示。微信凭证返回 `-14` 或 401 时，轮询停止、readiness 失败，需要重新扫码。
+
+## 全局人设与个性化设置
+
+打开 `/admin`，在“全局 AI 设置”中配置：
+
+- `人设`：AI 的身份、角色、语气和行为边界。
+- `个性化偏好`：回答语言、格式、详略和表达习惯。
+
+设置以明文保存在 SQLite，并作为管理员可信指令加入 Responses 的 `instructions`。滚动摘要仍被单独标记为不可信历史数据，不能覆盖全局人设或系统指令。两个字段各自最多 20000 个字符。
+
+也可以直接调用管理接口：
+
+```bash
+curl -X PUT http://127.0.0.1:3000/api/admin/settings \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"persona":"你叫小爪，是友善的技术助理","personalization":"默认使用简体中文，先给结论"}'
+```
+
+## 微信命令
+
+- `/help`：显示可用命令，不调用模型。
+- `/clear`：第一次发送只创建确认；5 分钟内再次发送才清除当前用户的全部消息和滚动摘要。`/reset` 已停用，不能绕过确认。
+- `/compact`：把当前用户尚未压缩的全部消息合入滚动摘要。摘要边界会推进，但原始消息不会删除。
+
+命令必须作为纯文本精确发送，命令消息本身不会写入聊天历史。
 
 ## Webhook 主动发送
 
@@ -101,7 +130,9 @@ node dist/cli.js peers
 node dist/cli.js send --peer USER_ID --text "任务已完成" --idempotency-key job-001
 ```
 
-远程调用可设置 `CLAWBOT_URL=https://clawbot.example.com`，也可以用 `--url` 和 `--token` 覆盖环境变量。项目作为 npm 包链接或安装后，命令名为 `clawbot`。
+直接运行本地 CLI 时会自动读取当前目录的 `.env`，并透明使用其中的 `ADMIN_TOKEN`/`WEBHOOK_TOKEN`，因此不需要手动传入 `--token`。HTTP 管理和 Webhook 接口仍保持鉴权，避免同机以外的请求取得管理权限。
+
+远程调用可设置 `CLAWBOT_URL=https://clawbot.example.com`，也可以用 `--url` 和 `--token` 覆盖环境变量；远程环境没有本地 `.env` 时仍须提供 Token。项目作为 npm 包链接或安装后，命令名为 `clawbot`。
 
 ## Docker
 
@@ -142,5 +173,5 @@ pnpm audit --prod
 
 - 首版只管理一个机器人账号；重新扫码会替换当前活跃凭证。
 - 支持 Webhook/CLI 主动文本发送，但不内置定时调度器。
-- 原始消息不会自动过期；只有用户 `/reset` 会删除该用户记录。生产环境应另行制定磁盘、备份和隐私策略。
+- 原始消息不会自动过期；只有用户二次确认 `/clear` 才会删除该用户记录。生产环境应另行制定磁盘、备份和隐私策略。
 - `CONTEXT_WINDOW_TOKENS` 必须与所选兼容模型一致，32K 只是保守默认值。

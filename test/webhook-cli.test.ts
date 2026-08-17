@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runCli } from "../src/cli.js";
+import { loadLocalEnvironment, runCli } from "../src/cli.js";
 import { KeyedSerialExecutor } from "../src/serial.js";
 import { WebhookPeerUnknownError, WebhookService } from "../src/webhook.js";
 import { makeStore, seedCredential, StubWeixinApi } from "./helpers.js";
@@ -41,6 +41,12 @@ describe("WebhookService", () => {
 });
 
 describe("Clawbot CLI", () => {
+  it("loads the project .env for direct local CLI usage", () => {
+    const loaded: string[] = [];
+    loadLocalEnvironment((path) => loaded.push(path ?? ""));
+    expect(loaded).toEqual([".env"]);
+  });
+
   it("sends through the webhook endpoint", async () => {
     let request: Request | undefined;
     const fetchStub: typeof fetch = async (input, init) => {

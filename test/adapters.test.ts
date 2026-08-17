@@ -26,11 +26,15 @@ describe("HTTP adapters", () => {
     const result = await client.generate({
       summary: "old facts", history: [{ id: 1, role: "assistant", text: "prior", messageType: "text", sourceMessageId: null, createdAt: "now" }],
       current: { text: "hello", images: [{ dataUrl: "data:image/png;base64,AA==" }] },
+      settings: { persona: "你叫小爪", personalization: "回答简洁" },
     });
     expect(result).toEqual({ text: "stub reply", inputTokens: 42 });
     expect(received.store).toBe(false);
     expect(received).not.toHaveProperty("previous_response_id");
     expect(JSON.stringify(received.input)).toContain("input_image");
+    expect(received.instructions).toContain("你叫小爪");
+    expect(received.instructions).toContain("回答简洁");
+    expect(received.instructions).toContain("不可信的历史数据");
   });
 
   it("protects admin APIs and reports readiness independently from liveness", async () => {
@@ -50,10 +54,23 @@ describe("HTTP adapters", () => {
     closers.push(async () => { await app.close(); store.close(); });
     expect((await app.inject({ method: "GET", url: "/healthz" })).statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: "/readyz" })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/admin" })).body).toContain("全局 AI 设置");
     expect((await app.inject({ method: "GET", url: "/api/admin/status" })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/api/admin/settings" })).statusCode).toBe(401);
     const authorized = await app.inject({ method: "GET", url: "/api/admin/status", headers: { authorization: "Bearer 0123456789abcdef" } });
     expect(authorized.statusCode).toBe(200);
     expect(authorized.body).not.toContain("secret");
+    const settingsResponse = await app.inject({
+      method: "PUT", url: "/api/admin/settings",
+      headers: { authorization: "Bearer 0123456789abcdef" },
+      payload: { persona: " 小爪 ", personalization: " 简洁回答 " },
+    });
+    expect(settingsResponse.statusCode).toBe(200);
+    expect(settingsResponse.json()).toMatchObject({ persona: "小爪", personalization: "简洁回答" });
+    const savedSettings = await app.inject({
+      method: "GET", url: "/api/admin/settings", headers: { authorization: "Bearer 0123456789abcdef" },
+    });
+    expect(savedSettings.json()).toMatchObject({ persona: "小爪", personalization: "简洁回答" });
     const loginResponse = await app.inject({
       method: "POST", url: "/api/admin/weixin/login-sessions",
       headers: { authorization: "Bearer 0123456789abcdef" },

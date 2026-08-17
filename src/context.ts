@@ -14,7 +14,8 @@ export class ContextEngine {
 
   async respond(accountId: string, peerId: string, current: CurrentInput): Promise<GenerateResult> {
     let context = this.load(accountId, peerId);
-    const estimate = estimateInputTokens(context.conversation.summary, context.messages, current, this.config.imageTokens);
+    const settings = this.store.getGlobalSettings();
+    const estimate = estimateInputTokens(context.conversation.summary, context.messages, current, this.config.imageTokens, settings);
     if (estimate >= this.config.windowTokens * this.config.compactRatio) {
       context = await this.compact(accountId, peerId, context, this.config.keepMessages);
     }
@@ -23,20 +24,28 @@ export class ContextEngine {
         summary: context.conversation.summary,
         history: context.messages,
         current,
+        settings,
       });
-      return { ...result, inputTokens: result.inputTokens || estimateInputTokens(context.conversation.summary, context.messages, current, this.config.imageTokens) };
+      return { ...result, inputTokens: result.inputTokens || estimateInputTokens(context.conversation.summary, context.messages, current, this.config.imageTokens, settings) };
     } catch (error) {
       if (!this.model.isContextLengthError(error)) throw error;
       const emergencyKeep = Math.max(2, Math.floor(this.config.keepMessages / 2));
       const emergency = await this.compact(accountId, peerId, context, emergencyKeep, true);
       try {
-        const result = await this.model.generate({ summary: emergency.conversation.summary, history: emergency.messages, current });
-        return { ...result, inputTokens: result.inputTokens || estimateInputTokens(emergency.conversation.summary, emergency.messages, current, this.config.imageTokens) };
+        const result = await this.model.generate({ summary: emergency.conversation.summary, history: emergency.messages, current, settings });
+        return { ...result, inputTokens: result.inputTokens || estimateInputTokens(emergency.conversation.summary, emergency.messages, current, this.config.imageTokens, settings) };
       } catch (retryError) {
         if (this.model.isContextLengthError(retryError)) throw new ContextLimitError("context remains too large after emergency compaction");
         throw retryError;
       }
     }
+  }
+
+  async compactAll(accountId: string, peerId: string): Promise<number> {
+    const context = this.load(accountId, peerId);
+    if (context.messages.length === 0) return 0;
+    await this.compact(accountId, peerId, context, 0);
+    return context.messages.length;
   }
 
   private load(accountId: string, peerId: string) {
@@ -63,7 +72,13 @@ export class ContextEngine {
   }
 }
 
-export function estimateInputTokens(summary: string, history: StoredMessage[], current: CurrentInput, imageTokens: number): number {
-  const text = [summary, ...history.map((message) => message.text), current.text].join("\n");
+export function estimateInputTokens(
+  summary: string,
+  history: StoredMessage[],
+  current: CurrentInput,
+  imageTokens: number,
+  settings: { personalization: string; persona: string } = { personalization: "", persona: "" },
+): number {
+  const text = [settings.persona, settings.personalization, summary, ...history.map((message) => message.text), current.text].join("\n");
   return Math.ceil(Buffer.byteLength(text, "utf8") / 3) + current.images.length * imageTokens + 512;
 }

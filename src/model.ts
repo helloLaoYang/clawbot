@@ -9,6 +9,10 @@ export type GenerateRequest = {
   summary: string;
   history: StoredMessage[];
   current: CurrentInput;
+  settings: {
+    personalization: string;
+    persona: string;
+  };
 };
 export type GenerateResult = { text: string; inputTokens: number };
 
@@ -28,9 +32,7 @@ export class ResponsesModelClient implements ModelClient {
   }
 
   async generate(request: GenerateRequest): Promise<GenerateResult> {
-    const instructions = request.summary
-      ? `你是微信中的 AI 助手。请直接、准确地回答用户。\n\n${historyGuard}\n\n<untrusted_history_summary>\n${request.summary}\n</untrusted_history_summary>`
-      : "你是微信中的 AI 助手。请直接、准确地回答用户。";
+    const instructions = buildInstructions(request);
     const input: Array<Record<string, unknown>> = request.history.map((message) => ({
       role: message.role,
       content: message.text,
@@ -70,4 +72,18 @@ export class ResponsesModelClient implements ModelClient {
     const text = `${candidate.code ?? ""} ${candidate.message}`.toLowerCase();
     return candidate.status === 400 && /(context|token).*(length|window|limit|maximum)|too many tokens/.test(text);
   }
+}
+
+function buildInstructions(request: GenerateRequest): string {
+  const sections = ["你是微信中的 AI 助手。请直接、准确地回答用户。"];
+  if (request.settings.persona) {
+    sections.push(`下面是管理员配置的全局人设，请在不违反更高优先级指令的前提下遵循：\n<global_persona>\n${request.settings.persona}\n</global_persona>`);
+  }
+  if (request.settings.personalization) {
+    sections.push(`下面是管理员配置的全局个性化偏好，请应用到回答方式：\n<global_personalization>\n${request.settings.personalization}\n</global_personalization>`);
+  }
+  if (request.summary) {
+    sections.push(`${historyGuard}\n\n<untrusted_history_summary>\n${request.summary}\n</untrusted_history_summary>`);
+  }
+  return sections.join("\n\n");
 }
